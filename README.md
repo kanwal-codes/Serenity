@@ -1,15 +1,52 @@
 # Serenity 🎵
 
-**Serenity** is a social music web app where friends host "listening parties" with perfectly synced playback, live chat, and shared playlists—right in the browser.
+**Serenity** is a modern music discovery and social platform that combines the best features from popular music and social apps. Experience Spotify-inspired music browsing, Apple Music-style discovery, Reddit-like community discussions, and Instagram-style messaging—all in one beautiful, cohesive interface.
 
 ## ✨ Features
 
-- **Synchronized Playback**: Perfect sync across all devices using heartbeat algorithm
-- **Real-time Chat**: Live messaging during listening sessions
-- **Group Management**: Create and join listening parties
-- **Playlist Sharing**: Collaborative playlist creation and management
-- **Google Authentication**: Secure sign-in with Google
-- **Responsive Design**: Works on desktop and mobile
+### 🏠 **Spotify-Inspired Home**
+- Collapsible sidebar navigation with playlists
+- Recently played tracks with hover-to-play
+- Made for you recommendations
+- Persistent music player with full controls
+- User profile integration
+
+### 🔍 **Apple Music-Style Discover**
+- Featured content with large, immersive cards
+- New releases section with album artwork
+- Trending songs with play controls
+- Browse by genre with visual categories
+- Curated playlists and recommendations
+
+### 📱 **Reddit-Inspired Community Feed**
+- Music discussion posts with voting system
+- Embedded music previews in posts
+- Comments, sharing, and bookmarking
+- Tags and awards system
+- Sort options (Hot, New, Top, Rising)
+
+### 💬 **Instagram-Style Chat**
+- Real-time messaging interface
+- Music sharing in conversations
+- Online status indicators
+- Typing indicators and media sharing
+- Group and direct messaging
+
+### 🎨 **Unified Design System**
+- Consistent dark theme throughout
+- Smooth animations and transitions
+- Responsive design for all devices
+- Modern UI with Tailwind CSS
+- Accessible and intuitive navigation
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 15, React 19, Tailwind CSS
+- **UI Components**: shadcn/ui, Radix UI, Lucide React
+- **Backend**: Firebase Authentication, Cloud Firestore
+- **Styling**: Tailwind CSS with custom design system
+- **Icons**: Lucide React icon library
+- **Deployment**: Vercel-ready
 
 ## 🚀 Quick Start
 
@@ -22,8 +59,8 @@
 ### 1. Clone and Install
 
 ```bash
-git clone <your-repo>
-cd serenity
+git clone https://github.com/kanwal-codes/Serenity.git
+cd Serenity
 npm install
 ```
 
@@ -105,30 +142,53 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 - **React 19** with hooks and context
 - **Tailwind CSS** for styling
 - **shadcn/ui** for components
+- **Lucide React** for icons
+- **Radix UI** for accessible components
 
 ### Backend
 - **Firebase Authentication** for user management
 - **Cloud Firestore** for data persistence
-- **Socket.IO** for real-time synchronization (coming soon)
+- **Real-time updates** for chat and interactions
 
-### Data Model
+### Key Components
 
 ```
-/users/{uid} - User profiles
-/groups/{id} - Listening parties
-  ├── members[] - Array of user IDs
-  ├── /messages/{id} - Chat messages
-  └── /playlists/{id} - Group playlists
-    └── tracks[] - Array of track objects
+src/
+├── app/
+│   ├── page.jsx              # Main app with navigation
+│   └── layout.jsx            # Root layout with AuthProvider
+├── components/
+│   ├── MainNavigation.jsx    # Unified sidebar navigation
+│   ├── SpotifyHome.jsx       # Spotify-inspired home page
+│   ├── AppleMusicDiscover.jsx # Apple Music-style discover
+│   ├── RedditFeed.jsx        # Reddit-inspired community feed
+│   ├── InstagramChat.jsx     # Instagram-style messaging
+│   └── ui/                   # Reusable UI components
+├── contexts/
+│   └── AuthContext.js        # Authentication context
+└── lib/
+    ├── firebase.js           # Firebase configuration
+    ├── auth.js               # Authentication functions
+    └── utils.js              # Utility functions
 ```
 
-## 🎵 How Synchronization Works
+## 🎵 How It Works
 
-1. **Leader Selection**: One user becomes the "leader" (host)
-2. **Heartbeat System**: Leader broadcasts position every ~800ms
-3. **Drift Detection**: Followers check if they're >250ms out of sync
-4. **Auto-Correction**: Out-of-sync clients automatically seek to correct position
-5. **Control Events**: Play/pause/seek actions are instantly mirrored
+### Navigation
+- **Unified Sidebar**: Single navigation that works across all pages
+- **Page Switching**: Seamless transitions between different app sections
+- **Persistent Player**: Music controls stay visible while browsing
+
+### Music Integration
+- **Preview Playback**: Hover-to-play functionality on tracks
+- **Music Sharing**: Share tracks in chat and community posts
+- **Playlist Management**: Create and manage personal playlists
+
+### Social Features
+- **Community Posts**: Share music discoveries and discussions
+- **Voting System**: Upvote/downvote posts and comments
+- **Real-time Chat**: Instant messaging with music sharing
+- **User Profiles**: Personalized experience with authentication
 
 ## 🛠️ Development
 
@@ -157,24 +217,24 @@ src/
 
 ## 🚧 Roadmap
 
-- [ ] Socket.IO real-time sync server
-- [ ] Audio engine with Media Session API
-- [ ] Playlist management UI
-- [ ] Real-time chat interface
+- [ ] Real-time chat functionality with Socket.IO
+- [ ] Spotify Web API integration for actual music streaming
+- [ ] User-generated content and posts
+- [ ] Advanced playlist management
 - [ ] Mobile PWA support
-- [ ] Spotify SDK integration
-- [ ] Presence indicators
-- [ ] Group moderation features
+- [ ] Push notifications
+- [ ] Music recommendation engine
+- [ ] Social features (following, friends)
 
 ## 📱 Demo Script
 
-1. **Sign In**: Use Google authentication
-2. **Create Group**: Start a new listening party
-3. **Add Tracks**: Upload or paste preview URLs
-4. **Start Party**: Begin synchronized playback
-5. **Invite Friends**: Share group ID for others to join
-6. **Chat**: Send messages during playback
-7. **Handoff**: Transfer leadership to another user
+1. **Sign In**: Use Google authentication to access the app
+2. **Explore Home**: Browse your music library with Spotify-style interface
+3. **Discover Music**: Check out new releases and trending tracks
+4. **Join Community**: Read and interact with music discussion posts
+5. **Chat with Friends**: Send messages and share music in real-time
+6. **Create Playlists**: Build your personal music collections
+7. **Vote & Engage**: Participate in community discussions and voting
 
 ## 🤝 Contributing
 
