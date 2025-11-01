@@ -28,8 +28,11 @@ export function MusicSearch({ onSongSelect, onShare }) {
 
   // Check Spotify connection on mount
   useEffect(() => {
-    const token = spotifyAPI.getAccessToken();
-    setIsSpotifyConnected(!!token);
+    const checkConnection = async () => {
+      const token = await spotifyAPI.getAccessToken();
+      setIsSpotifyConnected(!!token);
+    };
+    checkConnection();
   }, []);
 
   // Mock search results (replace with real Spotify API)
@@ -76,7 +79,7 @@ export function MusicSearch({ onSongSelect, onShare }) {
     
     try {
       // Check if user is authenticated with Spotify
-      const token = spotifyAPI.getAccessToken();
+      const token = await spotifyAPI.getAccessToken();
       
       if (!token) {
         // Use mock data if not authenticated
@@ -214,7 +217,13 @@ export function MusicSearch({ onSongSelect, onShare }) {
                     </p>
                   </div>
                   <Button
-                    onClick={() => spotifyAPI.authorize()}
+                    onClick={async () => {
+                      try {
+                        await spotifyAPI.authorize();
+                      } catch (error) {
+                        console.error('Authorization error:', error);
+                      }
+                    }}
                     className="bg-green-600 hover:bg-green-700"
                   >
                     <LogIn className="h-4 w-4 mr-2" />
@@ -241,7 +250,7 @@ export function MusicSearch({ onSongSelect, onShare }) {
                   {/* Album Art */}
                   <div className="relative">
                     <img
-                      src={song.images[0]?.url || '/api/placeholder/60/60'}
+                      src={song.images[0]?.url || '/vercel.svg'}
                       alt={song.album}
                       className="w-16 h-16 rounded-lg object-cover"
                     />

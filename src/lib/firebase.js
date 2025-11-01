@@ -4,20 +4,20 @@ import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   // Your web app's Firebase configuration
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBwsVIWL-mnUx8f3Wc_Sk21W4gSOjcqHjA",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "serenity-b0dcd.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "serenity-b0dcd",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "serenity-b0dcd.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "557349559606",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:557349559606:web:f54751acfe27eb00286797",
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-MQEK22VB0Y"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ""
 };
 
 // Check if we have a valid API key
-const hasValidApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY && 
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "demo-api-key" &&
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY.startsWith("AIza") ||
-  firebaseConfig.apiKey.startsWith("AIza");
+const hasValidApiKey = Boolean(
+  (process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.NEXT_PUBLIC_FIREBASE_API_KEY.startsWith("AIza")) ||
+  (firebaseConfig.apiKey && firebaseConfig.apiKey.startsWith("AIza"))
+);
 
 // Initialize Firebase
 let app;

@@ -7,39 +7,148 @@ const SPOTIFY_REDIRECT_URI = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || 'ht
 // Spotify Web API endpoints
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
+// PKCE helper functions
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
 class SpotifyAPI {
   constructor() {
     this.accessToken = null;
-    this.refreshToken = null;
   }
 
-  // Get access token from URL hash or localStorage
-  getAccessToken() {
+  // Exchange authorization code for access token
+  async exchangeCodeForToken(code, codeVerifier) {
+    try {
+      const response = await fetch('/api/spotify/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          code_verifier: codeVerifier,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to exchange code for token');
+      }
+
+      const data = await response.json();
+      
+      // Store token and expiration
+      this.accessToken = data.access_token;
+      localStorage.setItem('spotify_access_token', data.access_token);
+      
+      if (data.expires_in) {
+        const expiresAt = Date.now() + parseInt(data.expires_in, 10) * 1000;
+        localStorage.setItem('spotify_expires_at', String(expiresAt));
+      }
+
+      // Store refresh token if provided
+      if (data.refresh_token) {
+        localStorage.setItem('spotify_refresh_token', data.refresh_token);
+      }
+
+      return data.access_token;
+    } catch (error) {
+      console.error('Error exchanging code for token:', error);
+      throw error;
+    }
+  }
+
+  // Get access token from URL code, localStorage, or exchange
+  async getAccessToken() {
     if (this.accessToken) return this.accessToken;
 
-    // Check URL hash for access token
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.substring(1));
-    const token = params.get('access_token');
-    
-    if (token) {
-      this.accessToken = token;
-      localStorage.setItem('spotify_access_token', token);
-      return token;
+    // Check URL for authorization code (from callback)
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const error = urlParams.get('error');
+
+      if (error) {
+        console.error('Spotify authorization error:', error);
+        // Clean URL
+        window.history.replaceState(null, '', window.location.pathname);
+        return null;
+      }
+
+      if (code) {
+        // Get stored code verifier
+        const codeVerifier = sessionStorage.getItem('spotify_code_verifier');
+        if (codeVerifier) {
+          // Clean URL before navigation
+          window.history.replaceState(null, '', window.location.pathname);
+          
+          // Exchange code for token
+          try {
+            const token = await this.exchangeCodeForToken(code, codeVerifier);
+            sessionStorage.removeItem('spotify_code_verifier');
+            return token;
+          } catch (error) {
+            console.error('Failed to exchange code:', error);
+            return null;
+          }
+        }
+      }
     }
 
-    // Check localStorage
+    // Check localStorage for existing token
     const storedToken = localStorage.getItem('spotify_access_token');
+    const expiresAt = parseInt(localStorage.getItem('spotify_expires_at') || '0', 10);
     if (storedToken) {
-      this.accessToken = storedToken;
-      return storedToken;
+      // Ensure token is still valid
+      if (!expiresAt || Date.now() < expiresAt) {
+        this.accessToken = storedToken;
+        return storedToken;
+      }
+      // Expired token cleanup
+      this.accessToken = null;
+      localStorage.removeItem('spotify_access_token');
+      localStorage.removeItem('spotify_expires_at');
     }
 
     return null;
   }
 
-  // Redirect to Spotify authorization
-  authorize() {
+  // Redirect to Spotify authorization with PKCE
+  async authorize() {
+    // Guard: prevent 400s when envs are not configured
+    const clientIdMissing = !SPOTIFY_CLIENT_ID || SPOTIFY_CLIENT_ID === 'your-client-id';
+    const redirectMissing = !SPOTIFY_REDIRECT_URI;
+    if (clientIdMissing || redirectMissing) {
+      const message = 'Spotify is not configured. Set NEXT_PUBLIC_SPOTIFY_CLIENT_ID and NEXT_PUBLIC_SPOTIFY_REDIRECT_URI, then restart the dev server.';
+      console.warn(message);
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line no-alert
+        alert(message);
+      }
+      return;
+    }
+
+    if (typeof window === 'undefined') {
+      console.warn('authorize() must be called in the browser');
+      return;
+    }
+
     const scopes = [
       'user-read-private',
       'user-read-email',
@@ -53,18 +162,27 @@ class SpotifyAPI {
       'user-read-currently-playing'
     ].join(' ');
 
+    // Generate PKCE parameters
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    // Store code verifier for later exchange
+    sessionStorage.setItem('spotify_code_verifier', codeVerifier);
+
     const authUrl = `https://accounts.spotify.com/authorize?` +
       `client_id=${SPOTIFY_CLIENT_ID}&` +
-      `response_type=token&` +
+      `response_type=code&` +
       `redirect_uri=${encodeURIComponent(SPOTIFY_REDIRECT_URI)}&` +
-      `scope=${encodeURIComponent(scopes)}`;
+      `scope=${encodeURIComponent(scopes)}&` +
+      `code_challenge=${codeChallenge}&` +
+      `code_challenge_method=S256`;
 
     window.location.href = authUrl;
   }
 
   // Make authenticated API request
   async makeRequest(endpoint, options = {}) {
-    const token = this.getAccessToken();
+    const token = await this.getAccessToken();
     if (!token) {
       throw new Error('No access token available. Please authorize first.');
     }

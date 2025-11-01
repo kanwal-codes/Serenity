@@ -56,8 +56,12 @@ export function SpotifyDiscovery() {
     }
   };
 
-  const handleConnectSpotify = () => {
-    spotifyAPI.authorize();
+  const handleConnectSpotify = async () => {
+    try {
+      await spotifyAPI.authorize();
+    } catch (error) {
+      console.error('Authorization error:', error);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -141,7 +145,7 @@ export function SpotifyDiscovery() {
                     <CardContent className="p-4">
                       <div className="flex items-start space-x-3">
                         <img
-                          src={playlist.images[0]?.url || '/api/placeholder/60/60'}
+                          src={playlist.images[0]?.url || '/vercel.svg'}
                           alt={playlist.name}
                           className="w-16 h-16 rounded-lg object-cover"
                         />
