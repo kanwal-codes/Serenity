@@ -1,3 +1,27 @@
+/**
+ * Spotify OAuth Callback Page
+ * 
+ * This page handles the redirect from Spotify after user authorization.
+ * 
+ * FLOW:
+ * 1. User clicks "Connect Spotify" → redirected to Spotify
+ * 2. User authorizes app on Spotify
+ * 3. Spotify redirects to /callback?code=... (or ?error=...)
+ * 4. This page extracts the code and exchanges it for a token
+ * 5. User is redirected back to home page
+ * 
+ * WHY THIS PAGE EXISTS:
+ * - Spotify requires a redirect URI after authorization
+ * - We can't handle the callback in the same page that initiated auth
+ *   (navigation would lose context)
+ * - This dedicated page ensures clean OAuth flow handling
+ * 
+ * SECURITY:
+ * - Authorization code is single-use and short-lived
+ * - Code is immediately exchanged for token (not stored)
+ * - Error handling prevents code leakage in URL
+ */
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -10,22 +34,38 @@ export default function SpotifyCallback() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    /**
+     * Handle OAuth callback
+     * 
+     * This runs once when the page loads after Spotify redirect.
+     * It checks for either:
+     * - Error parameter (user denied access, etc.)
+     * - Authorization code (success - exchange for token)
+     */
     const handleCallback = async () => {
-      // Check for error in URL
+      // Check for error in URL (user denied, app error, etc.)
       const errorParam = searchParams.get('error');
       if (errorParam) {
         setError(`Spotify authorization failed: ${errorParam}`);
+        // Redirect back to home after showing error
         setTimeout(() => router.replace('/'), 3000);
         return;
       }
 
-      // Try to get access token (this will exchange the code if present)
+      // Try to get access token
+      // getAccessToken() will:
+      // 1. Check URL for authorization code
+      // 2. Get code_verifier from sessionStorage
+      // 3. Exchange code for token via API route
+      // 4. Store token in localStorage
       try {
         await spotifyAPI.getAccessToken();
+        // Success - redirect to home page
         router.replace('/');
       } catch (e) {
         console.error('Error during callback:', e);
         setError('Failed to connect to Spotify. Please try again.');
+        // Redirect after error message
         setTimeout(() => router.replace('/'), 3000);
       }
     };
@@ -33,6 +73,7 @@ export default function SpotifyCallback() {
     handleCallback();
   }, [router, searchParams]);
 
+  // Show error state if authorization failed
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -45,6 +86,7 @@ export default function SpotifyCallback() {
     );
   }
 
+  // Show loading state while processing callback
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
