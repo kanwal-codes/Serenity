@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo, useId } from "react";
+import { useState, useCallback, useRef, useMemo, useLayoutEffect } from "react";
 import {
   Home,
   Search,
@@ -410,11 +410,12 @@ function buildWavePath(width, mid, amplitude, cycles) {
   return d;
 }
 
-function WaveSeekBar({ progress, onSeek, isPlaying }) {
+function WaveSeekBar({ progress, onSeek }) {
   const barRef = useRef(null);
+  const wavePathRef = useRef(null);
   const draggingRef = useRef(false);
   const [isSeeking, setIsSeeking] = useState(false);
-  const clipId = useId();
+  const [pathLength, setPathLength] = useState(0);
   const percent = Math.max(0, Math.min(100, progress));
   const viewWidth = 400;
   const viewHeight = 24;
@@ -423,6 +424,25 @@ function WaveSeekBar({ progress, onSeek, isPlaying }) {
     () => buildWavePath(viewWidth, viewHeight / 2, 8.5, 5),
     []
   );
+
+  const measurePath = useCallback(() => {
+    const node = wavePathRef.current;
+    if (node) setPathLength(node.getTotalLength());
+  }, []);
+
+  useLayoutEffect(() => {
+    measurePath();
+  }, [measurePath, wavePath]);
+
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const observer = new ResizeObserver(measurePath);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [measurePath]);
+
+  const playedOffset = pathLength * (1 - percent / 100);
 
   const fractionFromEvent = useCallback((clientX) => {
     const bar = barRef.current;
@@ -491,52 +511,29 @@ function WaveSeekBar({ progress, onSeek, isPlaying }) {
           preserveAspectRatio="none"
           className="h-full w-full"
         >
-          <defs>
-            <clipPath id={clipId}>
-              <rect
-                x="0"
-                y="0"
-                width={(percent / 100) * viewWidth}
-                height={viewHeight}
-              />
-            </clipPath>
-          </defs>
-          <g className={cn(isPlaying && "animate-seek-wave")}>
-            <path
-              d={wavePath}
-              fill="none"
-              stroke="var(--muted-foreground)"
-              strokeWidth="2"
-              strokeOpacity="0.35"
-              vectorEffect="non-scaling-stroke"
-            />
-            <path
-              d={wavePath}
-              fill="none"
-              stroke="var(--m3-primary)"
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-              clipPath={`url(#${clipId})`}
-            />
-            <path
-              d={wavePath}
-              fill="none"
-              stroke="var(--muted-foreground)"
-              strokeWidth="2"
-              strokeOpacity="0.35"
-              vectorEffect="non-scaling-stroke"
-              transform={`translate(${viewWidth} 0)`}
-            />
-            <path
-              d={wavePath}
-              fill="none"
-              stroke="var(--m3-primary)"
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-              clipPath={`url(#${clipId})`}
-              transform={`translate(${viewWidth} 0)`}
-            />
-          </g>
+          <path
+            ref={wavePathRef}
+            d={wavePath}
+            fill="none"
+            stroke="var(--muted-foreground)"
+            strokeWidth="2.5"
+            strokeOpacity="0.28"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+          <path
+            d={wavePath}
+            fill="none"
+            stroke="var(--m3-primary)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            strokeDasharray={pathLength > 0 ? pathLength : undefined}
+            strokeDashoffset={pathLength > 0 ? playedOffset : undefined}
+            style={{ transition: "stroke-dashoffset 0.12s linear" }}
+          />
         </svg>
       </div>
 
@@ -766,7 +763,7 @@ export function MainNavigation({
               <span className="min-w-8 text-right font-body text-[11px] tabular-nums text-muted-foreground">
                 {currentTime}
               </span>
-              <WaveSeekBar progress={progress} onSeek={seek} isPlaying={isPlaying} />
+              <WaveSeekBar progress={progress} onSeek={seek} />
               <span className="min-w-8 font-body text-[11px] tabular-nums text-muted-foreground">
                 {duration}
               </span>
