@@ -39,7 +39,10 @@ export async function POST(request) {
     const requestOrigin = getRequestOrigin(request);
 
     if (refresh_token) {
-      if (!isSameOriginRequest(request)) {
+      if (
+        !isSameOriginRequest(request) &&
+        !isRedirectUriOriginRequest(request, redirectUri)
+      ) {
         return jsonError("Forbidden", 403);
       }
       if (!isValidRefreshToken(refresh_token)) {

@@ -111,7 +111,7 @@ export function isValidPkceVerifier(value) {
 }
 
 export function isValidAuthCode(value) {
-  return typeof value === "string" && value.length > 0 && value.length <= 512;
+  return typeof value === "string" && value.length > 0 && value.length <= 2048;
 }
 
 export function isValidRefreshToken(value) {

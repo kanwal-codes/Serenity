@@ -21,17 +21,44 @@
 const SPOTIFY_CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || 'your-client-id';
 const SPOTIFY_REDIRECT_URI = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || 'http://localhost:3000/callback';
 
+function normalizeRedirectUri(uri) {
+  return uri
+    .replace('http://localhost:', 'http://127.0.0.1:')
+    .replace('https://localhost:', 'https://127.0.0.1:');
+}
+
+function isLocalHostname(hostname) {
+  return hostname === 'localhost' || hostname === '127.0.0.1';
+}
+
+function getRegisteredRedirectHost() {
+  try {
+    return new URL(SPOTIFY_REDIRECT_URI).hostname;
+  } catch {
+    return null;
+  }
+}
+
 function getRedirectUri() {
   if (typeof window !== 'undefined') {
-    const origin = window.location.origin
-      .replace('http://localhost:', 'http://127.0.0.1:')
-      .replace('https://localhost:', 'https://127.0.0.1:');
-    return `${origin}/callback`;
+    const { hostname, origin } = window.location;
+
+    if (isLocalHostname(hostname)) {
+      return normalizeRedirectUri(`${origin}/callback`);
+    }
+
+    const configured = SPOTIFY_REDIRECT_URI
+      ? normalizeRedirectUri(SPOTIFY_REDIRECT_URI)
+      : null;
+
+    if (configured && !configured.includes('127.0.0.1') && !configured.includes('localhost')) {
+      return configured;
+    }
+
+    return normalizeRedirectUri(`${origin}/callback`);
   }
-  return SPOTIFY_REDIRECT_URI.replace(
-    'http://localhost:',
-    'http://127.0.0.1:'
-  );
+
+  return normalizeRedirectUri(SPOTIFY_REDIRECT_URI);
 }
 
 function storeCodeVerifier(codeVerifier) {
@@ -47,6 +74,7 @@ function readCodeVerifier() {
 }
 
 const OAUTH_CODE_LOCK_KEY = 'spotify_oauth_code_lock';
+let oauthExchangePromise = null;
 
 function lockOAuthCode(code) {
   if (typeof window === 'undefined') return false;
@@ -138,6 +166,13 @@ class SpotifyAPI {
       throw new Error('Missing Spotify authorization code.');
     }
 
+    if (
+      oauthExchangePromise &&
+      sessionStorage.getItem(OAUTH_CODE_LOCK_KEY) === code
+    ) {
+      return oauthExchangePromise;
+    }
+
     if (!lockOAuthCode(code)) {
       if (this.accessToken) {
         return this.accessToken;
@@ -154,29 +189,37 @@ class SpotifyAPI {
         return stored;
       }
 
+      if (oauthExchangePromise) {
+        return oauthExchangePromise;
+      }
+
       throw new Error(
         'Spotify authorization was already processed. Click Connect Spotify and try again.'
       );
     }
 
-    const codeVerifier = readCodeVerifier();
-    if (!codeVerifier) {
-      unlockOAuthCode();
-      throw new Error(
-        'Spotify login session expired. Click Connect Spotify and try again in the same browser tab.'
-      );
-    }
+    oauthExchangePromise = (async () => {
+      const codeVerifier = readCodeVerifier();
+      if (!codeVerifier) {
+        throw new Error(
+          'Spotify login session expired. Click Connect Spotify and try again in the same browser tab.'
+        );
+      }
 
-    try {
-      const token = await this.exchangeCodeForToken(code, codeVerifier);
-      clearCodeVerifier();
-      unlockOAuthCode();
-      return token;
-    } catch (error) {
-      unlockOAuthCode();
-      clearCodeVerifier();
-      throw error;
-    }
+      try {
+        const token = await this.exchangeCodeForToken(code, codeVerifier);
+        clearCodeVerifier();
+        return token;
+      } catch (error) {
+        clearCodeVerifier();
+        throw error;
+      } finally {
+        unlockOAuthCode();
+        oauthExchangePromise = null;
+      }
+    })();
+
+    return oauthExchangePromise;
   }
 
   /**
@@ -301,7 +344,12 @@ class SpotifyAPI {
 
     // Check if we're in browser (SSR check)
     if (typeof window !== 'undefined') {
-      // Check URL for authorization code (OAuth callback)
+      // Callback page handles code exchange — avoid duplicate work here.
+      if (window.location.pathname === '/callback') {
+        return null;
+      }
+
+      // Check URL for authorization code (OAuth callback fallback)
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const error = urlParams.get('error');
@@ -393,6 +441,23 @@ class SpotifyAPI {
     // SSR guard - can't redirect in server-side rendering
     if (typeof window === 'undefined') {
       console.warn('authorize() must be called in the browser');
+      return;
+    }
+
+    const registeredHost = getRegisteredRedirectHost();
+    if (
+      registeredHost &&
+      !isLocalHostname(window.location.hostname) &&
+      window.location.hostname !== registeredHost
+    ) {
+      const productionUrl = normalizeRedirectUri(SPOTIFY_REDIRECT_URI).replace(
+        /\/callback$/,
+        ''
+      );
+      const message =
+        `Spotify login must start from ${productionUrl}. Preview deployment URLs are not registered with Spotify.`;
+      window.alert(message);
+      window.location.href = productionUrl;
       return;
     }
 

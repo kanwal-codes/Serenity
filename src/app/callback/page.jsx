@@ -1,19 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import spotifyAPI from "@/lib/spotify";
+
+const CALLBACK_SESSION_KEY = "spotify_callback_session";
 
 function SpotifyCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState(null);
-  const handledRef = useRef(false);
 
   useEffect(() => {
-    if (handledRef.current) return;
-    handledRef.current = true;
-
     const handleCallback = async () => {
       const errorParam = searchParams.get("error");
       if (errorParam) {
@@ -29,20 +27,32 @@ function SpotifyCallbackContent() {
         return;
       }
 
+      const sessionKey = `${CALLBACK_SESSION_KEY}:${code.slice(0, 48)}`;
+      const sessionState = sessionStorage.getItem(sessionKey);
+      if (sessionState === "done") {
+        router.replace("/");
+        return;
+      }
+      if (sessionState !== "processing") {
+        sessionStorage.setItem(sessionKey, "processing");
+      }
+
       try {
         const token = await spotifyAPI.completeOAuthFromCallback(code);
         if (!token) {
           throw new Error("Could not complete Spotify login. Please try again.");
         }
+        sessionStorage.setItem(sessionKey, "done");
         router.replace("/");
       } catch (e) {
+        sessionStorage.removeItem(sessionKey);
         console.error("Error during callback:", e);
         setError(
           e instanceof Error
             ? e.message
             : "Failed to connect to Spotify. Please try again."
         );
-        setTimeout(() => router.replace("/"), 5000);
+        setTimeout(() => router.replace("/"), 8000);
       }
     };
 
@@ -57,6 +67,13 @@ function SpotifyCallbackContent() {
             Spotify connection failed
           </p>
           <p className="mb-4 font-body text-sm text-muted-foreground">{error}</p>
+          <button
+            type="button"
+            onClick={() => router.replace("/")}
+            className="mb-4 rounded-full bg-[var(--spotify-green)] px-5 py-2 font-body text-sm font-semibold text-black"
+          >
+            Back to Serenity
+          </button>
           <p className="font-body text-xs text-muted-foreground">
             Redirecting you back…
           </p>
