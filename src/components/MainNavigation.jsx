@@ -1,17 +1,11 @@
 "use client";
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { 
-  Home, 
-  Search, 
-  MessageCircle, 
-  Music, 
+import { useState, useCallback, useRef } from "react";
+import {
+  Home,
+  Search,
   Users,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
+  MessageCircle,
   Play,
   Pause,
   SkipBack,
@@ -19,280 +13,642 @@ import {
   Volume2,
   Shuffle,
   Repeat,
+  Repeat1,
   Heart,
-  MoreHorizontal
-} from 'lucide-react';
+  ListMusic,
+  ChevronLeft,
+  ChevronRight,
+  Library,
+  LogIn,
+  LogOut,
+  ExternalLink,
+  Loader2,
+  Music2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useSpotify } from "@/contexts/SpotifyContext";
+import { usePlayer } from "@/contexts/PlayerContext";
+import { Button } from "@/components/ui/button";
 
-export function MainNavigation({ currentPage, onPageChange, currentTrack, onPlayPause, isPlaying, children }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+const navItems = [
+  { id: "home", label: "Home", Icon: Home },
+  { id: "search", label: "Search", Icon: Search },
+  { id: "feed", label: "Feed", Icon: Users },
+  { id: "chat", label: "Messages", Icon: MessageCircle },
+];
 
-  const navigationItems = [
-    { id: 'home', label: 'Home', icon: Home, description: 'Your music library' },
-    { id: 'search', label: 'Search', icon: Search, description: 'Search for songs' },
-    { id: 'discover', label: 'Discover', icon: Music, description: 'Find new music' },
-    { id: 'feed', label: 'Feed', icon: Users, description: 'Community discussions' },
-    { id: 'chat', label: 'Messages', icon: MessageCircle, description: 'Chat with friends' }
-  ];
+function NavRailButton({ label, Icon, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      aria-label={label}
+      className="group relative flex w-full cursor-pointer flex-col items-center gap-1 border-none bg-transparent px-1 py-1.5 outline-none"
+    >
+      <div
+        className={cn(
+          "flex h-10 w-14 items-center justify-center rounded-[20px] transition-colors",
+          active ? "bg-sidebar-accent" : "group-hover:bg-sidebar-accent/60"
+        )}
+      >
+        <Icon
+          className={cn(
+            "h-[22px] w-[22px] transition-colors",
+            active ? "text-primary" : "text-[var(--on-surface-variant)] group-hover:text-foreground"
+          )}
+        />
+      </div>
+      <span
+        className={cn(
+          "max-w-[72px] truncate font-display text-[11px] leading-none transition-colors",
+          active ? "font-semibold text-primary" : "font-normal text-[var(--on-surface-variant)]"
+        )}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}
+
+function SpotifyLibraryPanel({ collapsed, onSelectLibrary, librarySelection }) {
+  const { isConnected, loading, profile, playlists, connect, disconnect } = useSpotify();
+
+  if (collapsed) {
+    return null;
+  }
 
   return (
-    <div className="flex h-screen bg-[#121212] text-white">
-      {/* Sidebar - Enhanced */}
-      <div className={`${sidebarCollapsed ? 'w-16' : 'w-64'} bg-gradient-to-b from-[#181818] to-[#1a1a1a] border-r border-[#2a2a2a] transition-all duration-300 flex flex-col shadow-xl`}>
-        {/* Logo */}
-        <div className="p-6 pb-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
-              <Music className="w-6 h-6 text-white drop-shadow-sm" />
-            </div>
-            {!sidebarCollapsed && (
-              <span className="text-2xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent animate-gradient">
-                Serenity
-              </span>
-            )}
-          </div>
+    <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+      <div className="border-b border-sidebar-border px-4 py-4">
+        <div className="flex items-center gap-2">
+          <Library className="h-5 w-5 text-primary" />
+          <h2 className="font-display text-sm font-bold text-foreground">Your Library</h2>
         </div>
+      </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3">
-          <div className="space-y-1">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onPageChange(item.id)}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
-                    currentPage === item.id
-                      ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white shadow-lg shadow-purple-500/50 border-l-2 border-purple-500'
-                      : 'text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] hover:translate-x-1'
-                  }`}
-                >
-                  <Icon className={`w-5 h-5 ${currentPage === item.id ? 'text-purple-400' : ''}`} />
-                  {!sidebarCollapsed && (
-                    <span className={`font-medium ${currentPage === item.id ? 'text-purple-300' : ''}`}>
-                      {item.label}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+      <div className="flex-1 overflow-y-auto px-3 py-3 scrollbar-none">
+        {loading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
           </div>
-
-          {/* Playlists Section */}
-          {!sidebarCollapsed && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between px-3 py-2">
-                <h3 className="text-sm font-semibold text-[#b3b3b3] uppercase tracking-wider">
-                  Your Library
-                </h3>
+        ) : !isConnected ? (
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--spotify-green)]/15">
+              <Music2 className="h-5 w-5 text-[var(--spotify-green)]" />
+            </div>
+            <p className="font-display text-sm font-semibold text-foreground">
+              Connect Spotify
+            </p>
+            <p className="mt-1 font-body text-xs leading-relaxed text-muted-foreground">
+              Sync your playlists, recently played, and search millions of tracks.
+            </p>
+            <Button
+              onClick={connect}
+              className="mt-4 w-full bg-[var(--spotify-green)] text-white hover:bg-[var(--spotify-green)]/90"
+              size="sm"
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              Connect Spotify
+            </Button>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                onSelectLibrary({
+                  type: "liked",
+                  id: "liked",
+                  name: "Liked Songs",
+                })
+              }
+              className={cn(
+                "mb-1 flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-sidebar-accent",
+                librarySelection?.type === "liked" && "bg-sidebar-accent"
+              )}
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/40 to-[var(--m3-tertiary)]/40">
+                <Heart className="h-4 w-4 text-primary" />
               </div>
-              
-              <div className="mt-4 space-y-1">
-                {[
-                  { name: "Liked Songs", songs: 42, color: "bg-gradient-to-br from-purple-500 to-pink-500" },
-                  { name: "Recently Played", songs: 28, color: "bg-gradient-to-br from-blue-500 to-cyan-500" },
-                  { name: "Discover Weekly", songs: 30, color: "bg-gradient-to-br from-green-500 to-emerald-500" },
-                  { name: "Release Radar", songs: 25, color: "bg-gradient-to-br from-orange-500 to-red-500" }
-                ].map((playlist, index) => (
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-semibold text-foreground">
+                  Liked Songs
+                </p>
+                <p className="font-body text-xs text-muted-foreground">Spotify saved tracks</p>
+              </div>
+            </button>
+
+            <p className="mb-2 mt-4 px-2 font-display text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Playlists
+            </p>
+
+            {playlists.length === 0 ? (
+              <p className="px-2 font-body text-xs text-muted-foreground">
+                No playlists found on your Spotify account.
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                {playlists.map((playlist) => (
                   <button
-                    key={index}
-                    className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all duration-200 text-left group hover:translate-x-1"
+                    key={playlist.id}
+                    type="button"
+                    onClick={() =>
+                      onSelectLibrary({
+                        type: "playlist",
+                        id: playlist.id,
+                        name: playlist.name,
+                        description: playlist.description,
+                        images: playlist.images,
+                        owner: playlist.owner,
+                        tracks: playlist.tracks,
+                        external_urls: playlist.external_urls,
+                      })
+                    }
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-sidebar-accent",
+                      librarySelection?.type === "playlist" &&
+                        librarySelection?.id === playlist.id &&
+                        "bg-sidebar-accent"
+                    )}
                   >
-                    <div className={`w-10 h-10 rounded-lg ${playlist.color} flex items-center justify-center shadow-md group-hover:scale-110 transition-transform`}>
-                      <Music className="w-5 h-5 text-white drop-shadow-sm" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate text-[#b3b3b3] group-hover:text-purple-300 transition-colors">{playlist.name}</p>
-                      <p className="text-xs text-[#6b7280] group-hover:text-[#9ca3af] transition-colors">{playlist.songs} songs</p>
+                    {playlist.images?.[0]?.url ? (
+                      <img
+                        src={playlist.images[0].url}
+                        alt={playlist.name}
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <Music2 className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-display text-sm font-medium text-foreground">
+                        {playlist.name}
+                      </p>
+                      <p className="truncate font-body text-xs text-muted-foreground">
+                        {playlist.tracks?.total ?? 0} tracks
+                      </p>
                     </div>
                   </button>
                 ))}
               </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="border-t border-sidebar-border p-3">
+        {isConnected && profile ? (
+          <div className="flex items-center gap-2 rounded-xl bg-sidebar-accent/60 p-2">
+            {profile.images?.[0]?.url ? (
+              <img
+                src={profile.images[0].url}
+                alt={profile.display_name}
+                className="h-9 w-9 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-m3-primary font-display text-sm font-bold text-primary-foreground">
+                {profile.display_name?.[0]?.toUpperCase() ?? "S"}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-display text-sm font-semibold text-foreground">
+                {profile.display_name}
+              </p>
+              <p className="truncate font-body text-[11px] text-[var(--spotify-green)]">
+                Spotify connected
+              </p>
             </div>
-          )}
+            <button
+              type="button"
+              onClick={disconnect}
+              aria-label="Disconnect Spotify"
+              className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          !loading && (
+            <button
+              type="button"
+              onClick={connect}
+              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-card py-2 font-display text-xs font-semibold text-primary outline-none transition-colors hover:bg-sidebar-accent"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              Connect Spotify
+            </button>
+          )
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function QueuePanel({
+  open,
+  onClose,
+  queueTracks,
+  queueIndex,
+  isPlaying,
+  onPlayFromQueue,
+}) {
+  if (!open || queueTracks.length === 0) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Close queue"
+        className="fixed inset-0 z-40 cursor-default border-none bg-black/20 outline-none"
+        onClick={onClose}
+      />
+      <div className="absolute bottom-full right-4 z-50 mb-2 flex max-h-80 w-72 flex-col overflow-hidden rounded-2xl border border-border bg-[var(--surface-container-high)] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <p className="font-display text-sm font-semibold text-foreground">Up Next</p>
+          <span className="font-body text-xs text-muted-foreground">
+            {queueTracks.length} tracks
+          </span>
+        </div>
+        <ul className="flex-1 overflow-y-auto py-1 scrollbar-none">
+          {queueTracks.map((track, index) => (
+            <li key={`${track.id}-${index}`}>
+              <button
+                type="button"
+                onClick={() => onPlayFromQueue(index)}
+                className={cn(
+                  "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-sidebar-accent",
+                  index === queueIndex && "bg-sidebar-accent/80"
+                )}
+              >
+                {track.cover ? (
+                  <img
+                    src={track.cover}
+                    alt=""
+                    className="h-9 w-9 shrink-0 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <Music2 className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      "truncate font-display text-sm",
+                      index === queueIndex
+                        ? "font-semibold text-primary"
+                        : "font-medium text-foreground"
+                    )}
+                  >
+                    {track.name}
+                  </p>
+                  <p className="truncate font-body text-xs text-muted-foreground">
+                    {track.artist}
+                  </p>
+                </div>
+                {index === queueIndex && (
+                  <span className="font-body text-[10px] font-semibold uppercase tracking-wide text-primary">
+                    {isPlaying ? "Now" : "Paused"}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+function SeekBar({ progress, onSeek }) {
+  const barRef = useRef(null);
+  const draggingRef = useRef(false);
+
+  const fractionFromEvent = useCallback((clientX) => {
+    const bar = barRef.current;
+    if (!bar) return 0;
+    const rect = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  }, []);
+
+  const handleSeek = useCallback(
+    (clientX) => {
+      onSeek(fractionFromEvent(clientX));
+    },
+    [fractionFromEvent, onSeek]
+  );
+
+  const handlePointerDown = useCallback(
+    (e) => {
+      draggingRef.current = true;
+      barRef.current?.setPointerCapture(e.pointerId);
+      handleSeek(e.clientX);
+    },
+    [handleSeek]
+  );
+
+  const handlePointerMove = useCallback(
+    (e) => {
+      if (!draggingRef.current) return;
+      handleSeek(e.clientX);
+    },
+    [handleSeek]
+  );
+
+  const handlePointerUp = useCallback((e) => {
+    draggingRef.current = false;
+    barRef.current?.releasePointerCapture(e.pointerId);
+  }, []);
+
+  return (
+    <div
+      ref={barRef}
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(progress)}
+      className="relative h-1 flex-1 cursor-pointer touch-none rounded-sm bg-muted"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      <div
+        className="pointer-events-none h-full rounded-sm bg-m3-primary"
+        style={{ width: `${progress}%` }}
+      />
+      <div
+        className="pointer-events-none absolute top-1/2 h-3 w-3 rounded-full bg-m3-primary"
+        style={{ left: `${progress}%`, transform: "translate(-50%, -50%)" }}
+      />
+    </div>
+  );
+}
+
+export function MainNavigation({
+  currentPage,
+  onPageChange,
+  librarySelection,
+  onSelectLibrary,
+  children,
+}) {
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const { isConnected } = useSpotify();
+  const {
+    currentTrack,
+    isPlaying,
+    togglePlayPause,
+    playNext,
+    playPrevious,
+    currentTime,
+    duration,
+    progress,
+    volume,
+    seek,
+    setVolume,
+    shuffle,
+    repeatMode,
+    isLiked,
+    toggleShuffle,
+    toggleRepeat,
+    toggleLike,
+    queueTracks,
+    queueIndex,
+    playFromQueue,
+  } = usePlayer();
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <div className="flex flex-1 overflow-hidden">
+        {/* Navigation Rail */}
+        <nav className="flex w-20 shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar py-5">
+          <button
+            type="button"
+            onClick={() => onPageChange("home")}
+            className="mb-5 flex cursor-pointer flex-col items-center gap-1 border-none bg-transparent outline-none"
+          >
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-m3-primary">
+              <span className="font-display text-lg font-extrabold text-primary-foreground">S</span>
+              {isConnected && (
+                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-[var(--spotify-green)]" />
+              )}
+            </div>
+            <span className="font-display text-[10px] font-semibold tracking-widest text-primary">
+              SERENITY
+            </span>
+          </button>
+
+          {navItems.map(({ id, label, Icon }) => (
+            <NavRailButton
+              key={id}
+              label={label}
+              Icon={Icon}
+              active={currentPage === id}
+              onClick={() => onPageChange(id)}
+            />
+          ))}
+
+          <div className="flex-1" />
+
+          <button
+            type="button"
+            onClick={() => setLibraryCollapsed(!libraryCollapsed)}
+            aria-label={libraryCollapsed ? "Expand library" : "Collapse library"}
+            className="flex w-full cursor-pointer flex-col items-center gap-1 border-none bg-transparent px-1 py-1.5 outline-none"
+          >
+            <div className="flex h-10 w-14 items-center justify-center rounded-[20px] transition-colors hover:bg-sidebar-accent">
+              {libraryCollapsed ? (
+                <ChevronRight className="h-5 w-5 text-[var(--on-surface-variant)]" />
+              ) : (
+                <ChevronLeft className="h-5 w-5 text-[var(--on-surface-variant)]" />
+              )}
+            </div>
+            <span className="font-display text-[11px] text-[var(--on-surface-variant)]">Library</span>
+          </button>
         </nav>
 
-        {/* User Profile */}
-        {!sidebarCollapsed && (
-          <div className="p-3 border-t border-[#2a2a2a]">
-            <div className="flex items-center space-x-3 p-2 rounded-md hover:bg-[#2a2a2a] transition-colors">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium">U</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">User</p>
-                <p className="text-xs text-[#6b7280]">Free Plan</p>
-              </div>
-            </div>
-          </div>
-        )}
+        <SpotifyLibraryPanel
+          collapsed={libraryCollapsed}
+          onSelectLibrary={onSelectLibrary}
+          librarySelection={librarySelection}
+        />
 
-        {/* Collapse Button */}
-        <div className="p-3 border-t border-[#2a2a2a]">
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="w-full flex items-center justify-center p-2 rounded-md text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-colors"
-          >
-            <ChevronLeft className={`w-5 h-5 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} />
-          </button>
+        {/* Main content */}
+        <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+          {children}
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header - Enhanced */}
-        <header className="bg-gradient-to-r from-[#181818] to-[#1a1a1a] px-6 py-5 border-b border-[#2a2a2a] backdrop-blur-sm sticky top-0 z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-3xl font-bold capitalize bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">
-                {navigationItems.find(item => item.id === currentPage)?.label || 'Home'}
-              </h1>
-              <div className="h-6 w-px bg-[#2a2a2a]"></div>
-              <p className="text-[#b3b3b3] text-sm font-medium">
-                {navigationItems.find(item => item.id === currentPage)?.description || ''}
+      {/* Now Playing Bar — always visible when a track is loaded */}
+      {currentTrack ? (
+        <div className="relative z-50 flex h-[88px] shrink-0 items-center gap-4 border-t border-border bg-[var(--surface-container)] px-4 shadow-[0_-4px_24px_rgba(0,0,0,0.35)] backdrop-blur-3xl">
+          <div className="flex min-w-[200px] items-center gap-3" style={{ width: 260 }}>
+            {currentTrack.cover ? (
+              <img
+                src={currentTrack.cover}
+                alt={currentTrack.name}
+                className="h-12 w-12 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-m3-primary">
+                <Play className="h-5 w-5 text-primary-foreground" />
+              </div>
+            )}
+            <div className="min-w-0 overflow-hidden">
+              <p className="truncate font-display text-sm font-semibold text-foreground">
+                {currentTrack.name}
+              </p>
+              <p className="truncate font-body text-xs text-muted-foreground">
+                {currentTrack.artist}
               </p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
+            <button
+              type="button"
+              onClick={toggleLike}
+              aria-label={isLiked ? "Remove from Liked Songs" : "Save to Liked Songs"}
+              className="ml-2 shrink-0 cursor-pointer border-none bg-transparent outline-none"
+            >
+              <Heart
+                className={cn(
+                  "h-5 w-5 transition-colors",
+                  isLiked ? "fill-primary text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              />
+            </button>
+          </div>
+
+          <div className="flex max-w-md flex-1 flex-col items-center gap-2">
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={toggleShuffle}
+                aria-label={shuffle ? "Disable shuffle" : "Enable shuffle"}
+                aria-pressed={shuffle}
+                className="cursor-pointer border-none bg-transparent outline-none"
               >
-                <Settings className="w-5 h-5" />
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-
-        {/* Now Playing Bar - Enhanced Material Design */}
-        {currentTrack && (
-          <div className="bg-gradient-to-r from-[#181818] via-[#1a1a1a] to-[#181818] border-t border-[#2a2a2a] px-6 py-3 backdrop-blur-sm">
-            <div className="flex items-center justify-between gap-4">
-              {/* Current Track Info */}
-              <div className="flex items-center space-x-4 flex-[0_0_30%] min-w-0">
-                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 rounded-md shadow-lg flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Music className="w-7 h-7 text-white drop-shadow-sm" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate hover:text-purple-400 transition-colors cursor-pointer">
-                    {currentTrack.name}
-                  </p>
-                  <p className="text-xs text-[#b3b3b3] truncate hover:text-white transition-colors cursor-pointer">
-                    {currentTrack.artist}
-                  </p>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-[#b3b3b3] hover:text-pink-400 hover:bg-[#2a2a2a] transition-all rounded-full"
-                >
-                  <Heart className="w-4 h-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* Player Controls - Center */}
-              <div className="flex flex-col items-center flex-1 max-w-md">
-                <div className="flex items-center justify-center space-x-2 mb-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
-                  >
-                    <Shuffle className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
-                  >
-                    <SkipBack className="w-5 h-5" />
-                  </Button>
-                  <Button 
-                    onClick={onPlayPause}
-                    className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-xl"
-                  >
-                    {isPlaying ? (
-                      <Pause className="w-5 h-5 ml-0" />
-                    ) : (
-                      <Play className="w-5 h-5 ml-0.5" />
+                <Shuffle
+                  className={cn(
+                    "h-[18px] w-[18px] transition-colors",
+                    shuffle ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  )}
+                />
+              </button>
+              <button type="button" onClick={playPrevious} className="cursor-pointer border-none bg-transparent outline-none">
+                <SkipBack className="h-[26px] w-[26px] text-foreground" />
+              </button>
+              <button
+                type="button"
+                onClick={togglePlayPause}
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-none bg-m3-primary outline-none transition-transform active:scale-95"
+              >
+                {isPlaying ? (
+                  <Pause className="h-6 w-6 text-primary-foreground" />
+                ) : (
+                  <Play className="ml-0.5 h-6 w-6 text-primary-foreground" />
+                )}
+              </button>
+              <button type="button" onClick={playNext} className="cursor-pointer border-none bg-transparent outline-none">
+                <SkipForward className="h-[26px] w-[26px] text-foreground" />
+              </button>
+              <button
+                type="button"
+                onClick={toggleRepeat}
+                aria-label={
+                  repeatMode === "one"
+                    ? "Repeat one"
+                    : repeatMode === "all"
+                      ? "Repeat all"
+                      : "Repeat off"
+                }
+                aria-pressed={repeatMode !== "off"}
+                className="cursor-pointer border-none bg-transparent outline-none"
+              >
+                {repeatMode === "one" ? (
+                  <Repeat1
+                    className="h-[18px] w-[18px] text-primary"
+                  />
+                ) : (
+                  <Repeat
+                    className={cn(
+                      "h-[18px] w-[18px] transition-colors",
+                      repeatMode === "all"
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground"
                     )}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
-                  >
-                    <SkipForward className="w-5 h-5" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
-                  >
-                    <Repeat className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                {/* Progress Bar - Interactive */}
-                <div className="flex items-center space-x-3 w-full group">
-                  <span className="text-xs text-[#b3b3b3] tabular-nums min-w-[40px] text-right">
-                    {currentTrack.currentTime || '0:00'}
-                  </span>
-                  <div className="flex-1 h-1 bg-[#404040] rounded-full cursor-pointer group-hover:h-1.5 transition-all relative overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-300 relative group-hover:from-purple-400 group-hover:to-pink-400"
-                      style={{ width: '33%' }}
-                    >
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"></div>
-                    </div>
-                  </div>
-                  <span className="text-xs text-[#b3b3b3] tabular-nums min-w-[40px]">
-                    {currentTrack.duration || '0:00'}
-                  </span>
-                </div>
-              </div>
+                  />
+                )}
+              </button>
+            </div>
 
-              {/* Volume & Queue - Right */}
-              <div className="flex items-center space-x-2 flex-[0_0_20%] justify-end">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-[#b3b3b3] hover:text-white hover:bg-[#2a2a2a] transition-all rounded-full"
-                >
-                  <Volume2 className="w-4 h-4" />
-                </Button>
-                <div className="w-24 h-1 bg-[#404040] rounded-full cursor-pointer hover:h-1.5 transition-all group relative overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-300"
-                    style={{ width: '75%' }}
-                  >
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"></div>
-                  </div>
-                </div>
-              </div>
+            <div className="flex w-full max-w-[500px] items-center gap-2">
+              <span className="min-w-8 text-right font-body text-[11px] tabular-nums text-muted-foreground">
+                {currentTime}
+              </span>
+              <SeekBar progress={progress} onSeek={seek} />
+              <span className="min-w-8 font-body text-[11px] tabular-nums text-muted-foreground">
+                {duration}
+              </span>
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="relative flex min-w-[160px] items-center justify-end gap-3" style={{ width: 200 }}>
+            <QueuePanel
+              open={queueOpen}
+              onClose={() => setQueueOpen(false)}
+              queueTracks={queueTracks}
+              queueIndex={queueIndex}
+              isPlaying={isPlaying}
+              onPlayFromQueue={(index) => {
+                playFromQueue(index);
+                setQueueOpen(false);
+              }}
+            />
+            {currentTrack.external_urls?.spotify && (
+              <a
+                href={currentTrack.external_urls.spotify}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground transition-colors hover:text-primary"
+                aria-label="Open in Spotify"
+              >
+                <ExternalLink className="h-5 w-5" />
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => setQueueOpen((open) => !open)}
+              aria-label="Show queue"
+              aria-expanded={queueOpen}
+              className="cursor-pointer border-none bg-transparent outline-none"
+            >
+              <ListMusic
+                className={cn(
+                  "h-5 w-5 transition-colors",
+                  queueOpen ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              />
+            </button>
+            <Volume2 className="h-5 w-5 text-muted-foreground" />
+            <div
+              className="relative h-1 w-20 cursor-pointer rounded-sm bg-muted"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setVolume((e.clientX - rect.left) / rect.width);
+              }}
+            >
+              <div
+                className="h-full rounded-sm bg-muted-foreground transition-all"
+                style={{ width: `${volume * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

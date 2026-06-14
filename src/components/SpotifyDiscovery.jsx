@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ALBUMS, EXPLORE_MOODS } from '@/lib/musicData';
 import spotifyAPI from '@/lib/spotify';
+import { useSpotify } from '@/contexts/SpotifyContext';
+import { usePlayer } from '@/contexts/PlayerContext';
 import { 
   Music, 
   Play, 
@@ -16,20 +19,15 @@ import {
   Headphones
 } from 'lucide-react';
 
-export function SpotifyDiscovery() {
+export function SpotifyDiscovery({ onSelectLibrary }) {
   const [featuredPlaylists, setFeaturedPlaylists] = useState([]);
   const [newReleases, setNewReleases] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isSpotifyConnected, setIsSpotifyConnected] = useState(false);
-
-  // Check Spotify connection on mount
-  useEffect(() => {
-    const token = spotifyAPI.getAccessToken();
-    setIsSpotifyConnected(!!token);
-  }, []);
+  const { isConnected, connect } = useSpotify();
+  const { playTrack } = usePlayer();
 
   const loadFeaturedPlaylists = async () => {
-    if (!isSpotifyConnected) return;
+    if (!isConnected) return;
     
     setLoading(true);
     try {
@@ -43,7 +41,7 @@ export function SpotifyDiscovery() {
   };
 
   const loadNewReleases = async () => {
-    if (!isSpotifyConnected) return;
+    if (!isConnected) return;
     
     setLoading(true);
     try {
@@ -56,9 +54,16 @@ export function SpotifyDiscovery() {
     }
   };
 
+  useEffect(() => {
+    if (isConnected) {
+      loadFeaturedPlaylists();
+      loadNewReleases();
+    }
+  }, [isConnected]);
+
   const handleConnectSpotify = async () => {
     try {
-      await spotifyAPI.authorize();
+      await connect();
     } catch (error) {
       console.error('Authorization error:', error);
     }
@@ -73,9 +78,38 @@ export function SpotifyDiscovery() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card>
+    <div className="page-scroll">
+      <div className="page-content space-y-6">
+      <h1 className="font-display text-[28px] font-extrabold text-foreground">Explore</h1>
+
+      {/* Moods & Moments */}
+      <div>
+        <h2 className="mb-3.5 font-display text-xl font-bold text-foreground">Moods & Moments</h2>
+        <div className="grid grid-cols-3 gap-3">
+          {EXPLORE_MOODS.map((mood) => (
+            <div
+              key={mood.label}
+              className="relative h-[130px] cursor-pointer overflow-hidden rounded-[18px]"
+              style={{ gridColumn: `span ${mood.span}` }}
+              onClick={() => playTrack(ALBUMS[0].tracks[0])}
+            >
+              <img src={mood.img} alt={mood.label} className="h-full w-full object-cover" />
+              <div
+                className="absolute inset-0 flex flex-col justify-end p-4"
+                style={{ background: `linear-gradient(to top, ${mood.tint} 0%, transparent 70%)` }}
+              >
+                <p className="font-display text-base font-bold" style={{ color: mood.accent }}>
+                  {mood.label}
+                </p>
+                <p className="font-body text-xs text-white/70">{mood.sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Spotify connection */}
+      <Card className="border-border bg-card py-0 shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Headphones className="h-6 w-6 text-green-600" />
@@ -86,30 +120,30 @@ export function SpotifyDiscovery() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!isSpotifyConnected ? (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <div className="flex items-center justify-between">
+          {!isConnected ? (
+            <div className="rounded-2xl border border-[var(--m3-teal)]/30 bg-[var(--m3-teal)]/10 p-4">
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h4 className="font-medium text-green-800 dark:text-green-200">
+                  <h4 className="font-display font-medium text-accent">
                     Connect to Spotify for Music Discovery
                   </h4>
-                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Get access to featured playlists, new releases, and personalized recommendations
                   </p>
                 </div>
                 <Button
                   onClick={handleConnectSpotify}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="shrink-0 bg-[var(--spotify-green)] text-white hover:bg-[var(--spotify-green)]/90"
                 >
                   Connect Spotify
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                <div className="h-2 w-2 rounded-full bg-[var(--spotify-green)]"></div>
+                <span className="text-sm font-medium text-primary">
                   Connected to Spotify
                 </span>
               </div>
@@ -118,7 +152,7 @@ export function SpotifyDiscovery() {
         </CardContent>
       </Card>
 
-      {isSpotifyConnected && (
+      {isConnected && (
         <Tabs defaultValue="playlists" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="playlists">Featured Playlists</TabsTrigger>
@@ -151,10 +185,10 @@ export function SpotifyDiscovery() {
                         />
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-lg truncate">{playlist.name}</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
                             {playlist.description}
                           </p>
-                          <div className="flex items-center space-x-2 mt-2 text-xs text-gray-500">
+                          <div className="mt-2 flex items-center space-x-2 text-xs text-muted-foreground">
                             <Users className="h-3 w-3" />
                             <span>{playlist.owner.display_name}</span>
                           </div>
@@ -163,11 +197,29 @@ export function SpotifyDiscovery() {
                       <div className="mt-3 flex space-x-2">
                         <Button
                           size="sm"
+                          onClick={() =>
+                            onSelectLibrary?.({
+                              type: "playlist",
+                              id: playlist.id,
+                              name: playlist.name,
+                              description: playlist.description,
+                              images: playlist.images,
+                              owner: playlist.owner,
+                              tracks: playlist.tracks,
+                              external_urls: playlist.external_urls,
+                            })
+                          }
+                        >
+                          <Play className="h-4 w-4 mr-1" />
+                          Open Playlist
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => window.open(playlist.external_urls.spotify, '_blank')}
-                          className="bg-green-600 hover:bg-green-700 text-white"
                         >
                           <ExternalLink className="h-4 w-4 mr-1" />
-                          Open in Spotify
+                          Spotify
                         </Button>
                       </div>
                     </CardContent>
@@ -179,9 +231,9 @@ export function SpotifyDiscovery() {
             {featuredPlaylists.length === 0 && !loading && (
               <Card>
                 <CardContent className="py-8 text-center">
-                  <Music className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-gray-500">No playlists loaded yet</p>
-                  <p className="text-sm text-gray-400 mt-1">
+                  <Music className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                  <p className="text-muted-foreground">No playlists loaded yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Click "Load Playlists" to discover featured content
                   </p>
                 </CardContent>
@@ -215,10 +267,10 @@ export function SpotifyDiscovery() {
                         />
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-lg truncate">{album.name}</h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                          <p className="text-sm text-muted-foreground">
                             {album.artists.join(', ')}
                           </p>
-                          <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                          <div className="mt-2 flex items-center space-x-4 text-xs text-muted-foreground">
                             <span className="flex items-center space-x-1">
                               <Calendar className="h-3 w-3" />
                               <span>{formatDate(album.release_date)}</span>
@@ -234,7 +286,7 @@ export function SpotifyDiscovery() {
                         <Button
                           size="sm"
                           onClick={() => window.open(album.external_urls.spotify, '_blank')}
-                          className="bg-green-600 hover:bg-green-700 text-white"
+                          className="bg-[var(--spotify-green)] text-white hover:bg-[var(--spotify-green)]/90"
                         >
                           <ExternalLink className="h-4 w-4 mr-1" />
                           Open in Spotify
@@ -249,9 +301,9 @@ export function SpotifyDiscovery() {
             {newReleases.length === 0 && !loading && (
               <Card>
                 <CardContent className="py-8 text-center">
-                  <Music className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-gray-500">No new releases loaded yet</p>
-                  <p className="text-sm text-gray-400 mt-1">
+                  <Music className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+                  <p className="text-muted-foreground">No new releases loaded yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Click "Load New Releases" to discover latest albums
                   </p>
                 </CardContent>
@@ -261,45 +313,45 @@ export function SpotifyDiscovery() {
         </Tabs>
       )}
 
-      {/* Free Features Info */}
-      <Card className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20">
+      <Card className="border-border bg-card">
         <CardContent className="p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
-            <Star className="h-5 w-5 text-yellow-500" />
+          <h3 className="mb-4 flex items-center space-x-2 font-display text-lg font-semibold">
+            <Star className="h-5 w-5 text-[var(--m3-tertiary)]" />
             <span>What You Get with Spotify Free</span>
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Search millions of songs</span>
+                <div className="h-2 w-2 rounded-full bg-[var(--spotify-green)]"></div>
+                <span className="text-muted-foreground">Search millions of songs</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>30-second previews of most tracks</span>
+                <div className="h-2 w-2 rounded-full bg-[var(--spotify-green)]"></div>
+                <span className="text-muted-foreground">30-second previews of most tracks</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>High-quality album artwork</span>
+                <div className="h-2 w-2 rounded-full bg-[var(--spotify-green)]"></div>
+                <span className="text-muted-foreground">High-quality album artwork</span>
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Featured playlists and new releases</span>
+                <div className="h-2 w-2 rounded-full bg-[var(--spotify-green)]"></div>
+                <span className="text-muted-foreground">Featured playlists and new releases</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Direct links to open in Spotify app</span>
+                <div className="h-2 w-2 rounded-full bg-[var(--spotify-green)]"></div>
+                <span className="text-muted-foreground">Direct links to open in Spotify app</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Complete song metadata and info</span>
+                <div className="h-2 w-2 rounded-full bg-[var(--spotify-green)]"></div>
+                <span className="text-muted-foreground">Complete song metadata and info</span>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -1,387 +1,322 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import spotifyAPI from '@/lib/spotify';
-import { 
-  Search, 
-  Play, 
-  Pause, 
-  ExternalLink, 
-  Music, 
+import { useState } from "react";
+import {
+  Search,
+  Play,
+  Pause,
+  ExternalLink,
+  Music2,
   Clock,
-  Users,
-  Heart,
-  LogIn
-} from 'lucide-react';
+  LogIn,
+  Loader2,
+} from "lucide-react";
+import spotifyAPI from "@/lib/spotify";
+import { useSpotify } from "@/contexts/SpotifyContext";
+import { usePlayer } from "@/contexts/PlayerContext";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
-export function MusicSearch({ onSongSelect, onShare }) {
-  const [searchQuery, setSearchQuery] = useState('');
+const POPULAR_TERMS = [
+  "Bohemian Rhapsody",
+  "Blinding Lights",
+  "Shape of You",
+  "Levitating",
+  "Arjan Dhillon",
+];
+
+export function MusicSearch() {
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [isPlaying, setIsPlaying] = useState(null);
-  const [currentAudio, setCurrentAudio] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isSpotifyConnected, setIsSpotifyConnected] = useState(false);
-
-  // Check Spotify connection on mount
-  useEffect(() => {
-    const checkConnection = async () => {
-      const token = await spotifyAPI.getAccessToken();
-      setIsSpotifyConnected(!!token);
-    };
-    checkConnection();
-  }, []);
-
-  // Mock search results (replace with real Spotify API)
-  const mockSearchResults = [
-    {
-      id: '1',
-      name: 'Bohemian Rhapsody',
-      artist: 'Queen',
-      album: 'A Night at the Opera',
-      preview_url: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav', // Mock preview
-      external_urls: { spotify: 'https://open.spotify.com/track/4u7EnebtmKWnUHrv3oiiqO' },
-      duration_ms: 355000,
-      popularity: 95,
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273ce4f1737bc8a646c8c4bd25a' }]
-    },
-    {
-      id: '2',
-      name: 'Midnight City',
-      artist: 'M83',
-      album: 'Hurry Up, We\'re Dreaming',
-      preview_url: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav',
-      external_urls: { spotify: 'https://open.spotify.com/track/1FRzT4XgHrYgxkp6KEWRWH' },
-      duration_ms: 244000,
-      popularity: 78,
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273a4c5d5c35ad91f1d7173b3b6' }]
-    },
-    {
-      id: '3',
-      name: 'Blinding Lights',
-      artist: 'The Weeknd',
-      album: 'After Hours',
-      preview_url: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav',
-      external_urls: { spotify: 'https://open.spotify.com/track/0VjIjW4Wl0ToT3Bk8BvB3d' },
-      duration_ms: 200000,
-      popularity: 88,
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36' }]
-    }
-  ];
+  const [hasSearched, setHasSearched] = useState(false);
+  const { isConnected, connect } = useSpotify();
+  const { playTrack, currentTrack, isPlaying, togglePlayPause } = usePlayer();
 
   const handleSearch = async (query) => {
-    if (!query.trim()) return;
-    
-    setLoading(true);
-    
-    try {
-      // Check if user is authenticated with Spotify
-      const token = await spotifyAPI.getAccessToken();
-      
-      if (!token) {
-        // Use mock data if not authenticated
-        setTimeout(() => {
-          const filtered = mockSearchResults.filter(song => 
-            song.name.toLowerCase().includes(query.toLowerCase()) ||
-            song.artist.toLowerCase().includes(query.toLowerCase()) ||
-            song.album.toLowerCase().includes(query.toLowerCase())
-          );
-          setSearchResults(filtered);
-          setLoading(false);
-        }, 1000);
-        return;
-      }
+    const trimmed = query.trim();
+    if (!trimmed) return;
 
-      // Use real Spotify API
-      const results = await spotifyAPI.searchTracks(query, 20);
-      setSearchResults(results);
+    setLoading(true);
+    setHasSearched(true);
+
+    try {
+      const token = await spotifyAPI.getAccessToken();
+      if (token) {
+        const results = await spotifyAPI.searchTracks(trimmed, 25);
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
     } catch (error) {
-      console.error('Search error:', error);
-      // Fallback to mock data
-      const filtered = mockSearchResults.filter(song => 
-        song.name.toLowerCase().includes(query.toLowerCase()) ||
-        song.artist.toLowerCase().includes(query.toLowerCase()) ||
-        song.album.toLowerCase().includes(query.toLowerCase())
-      );
-      setSearchResults(filtered);
+      console.error("Search error:", error);
+      setSearchResults([]);
     } finally {
       setLoading(false);
     }
   };
 
   const handlePlay = async (song) => {
-    // Stop current audio if playing
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-    }
-
-    if (isPlaying === song.id) {
-      setIsPlaying(null);
-      setCurrentAudio(null);
+    if (currentTrack?.id === song.id) {
+      togglePlayPause();
       return;
     }
-
-    // Check if preview is available
-    if (!song.preview_url) {
-      console.log('No preview available for this song');
-      // Open in Spotify instead
-      window.open(song.external_urls.spotify, '_blank');
-      return;
-    }
-
-    // Create new audio element
-    const audio = new Audio(song.preview_url);
-    
-    audio.addEventListener('loadeddata', () => {
-      audio.play();
-      setIsPlaying(song.id);
-      setCurrentAudio(audio);
-    });
-
-    audio.addEventListener('ended', () => {
-      setIsPlaying(null);
-      setCurrentAudio(null);
-    });
-
-    audio.addEventListener('error', () => {
-      console.log('Preview not available for this song');
-      // Fallback: open Spotify
-      window.open(song.external_urls.spotify, '_blank');
-    });
-  };
-
-  const handleShare = (song) => {
-    onShare?.(song);
+    await playTrack(song, searchResults);
   };
 
   const formatDuration = (ms) => {
+    if (!ms) return "0:00";
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const getPreviewStatus = (song) => {
-    if (song.has_preview === false) {
-      return { available: false, message: 'No preview available' };
-    }
-    if (song.preview_url) {
-      return { available: true, message: '30-second preview' };
-    }
-    return { available: false, message: 'Preview not available' };
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   return (
-    <div className="space-y-6">
-      {/* Search Bar */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Search className="h-5 w-5" />
-            <span>Search Music</span>
-          </CardTitle>
-          <CardDescription>
-            Find songs, artists, or albums to play and share
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Search for songs, artists, or albums..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch(searchQuery)}
-                className="flex-1"
-              />
-              <Button 
-                onClick={() => handleSearch(searchQuery)}
-                disabled={loading}
-              >
-                {loading ? 'Searching...' : 'Search'}
-              </Button>
-            </div>
-            
-            {!isSpotifyConnected && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium text-green-800 dark:text-green-200">
-                      Connect to Spotify for Real Music Search
-                    </h4>
-                    <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                      Get access to millions of songs and play previews
-                    </p>
-                  </div>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        await spotifyAPI.authorize();
-                      } catch (error) {
-                        console.error('Authorization error:', error);
-                      }
-                    }}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <LogIn className="h-4 w-4 mr-2" />
-                    Connect Spotify
-                  </Button>
+    <div className="page-scroll">
+      <div className="page-content pb-8">
+        <div className="mb-6">
+          <h1 className="font-display text-[28px] font-extrabold text-foreground">
+            Search
+          </h1>
+          <p className="mt-1 font-body text-sm text-muted-foreground">
+            Find songs, artists, and albums from Spotify
+          </p>
+        </div>
+
+        {/* Search input */}
+        <form
+          className="mb-6 flex gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSearch(searchQuery);
+          }}
+        >
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              placeholder="What do you want to listen to?"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input h-12 w-full rounded-full border border-border bg-[var(--surface-container-high)] pl-12 pr-4 font-body text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={loading || !searchQuery.trim()}
+            className="h-12 rounded-full bg-m3-primary px-6 font-display font-semibold text-primary-foreground hover:bg-m3-primary/90"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Searching
+              </>
+            ) : (
+              "Search"
+            )}
+          </Button>
+        </form>
+
+        {/* Connect Spotify */}
+        {!isConnected && (
+          <div className="mb-8 rounded-2xl border border-border bg-card p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--spotify-green)]/15">
+                  <Music2 className="h-5 w-5 text-[var(--spotify-green)]" />
+                </div>
+                <div>
+                  <p className="font-display text-sm font-semibold text-foreground">
+                    Connect Spotify to search millions of tracks
+                  </p>
+                  <p className="mt-1 font-body text-xs leading-relaxed text-muted-foreground">
+                    Link your account to search and play music from your library.
+                  </p>
                 </div>
               </div>
-            )}
+              <Button
+                onClick={connect}
+                className="shrink-0 rounded-full bg-[var(--spotify-green)] text-white hover:bg-[var(--spotify-green)]/90"
+              >
+                <LogIn className="mr-2 h-4 w-4" />
+                Connect Spotify
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Search Results */}
-      {searchResults.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">
-            Search Results ({searchResults.length})
-          </h3>
-          
-          {searchResults.map((song) => (
-            <Card key={song.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-4">
-                  {/* Album Art */}
-                  <div className="relative">
-                    <img
-                      src={song.images[0]?.url || '/vercel.svg'}
-                      alt={song.album}
-                      className="w-16 h-16 rounded-lg object-cover"
-                    />
-                    <Button
-                      size="sm"
-                      className="absolute inset-0 m-auto w-8 h-8 rounded-full bg-black/50 hover:bg-black/70"
-                      onClick={() => handlePlay(song)}
-                    >
-                      {isPlaying === song.id ? (
-                        <Pause className="h-4 w-4 text-white" />
-                      ) : (
-                        <Play className="h-4 w-4 text-white" />
-                      )}
-                    </Button>
-                  </div>
-
-                  {/* Song Info */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-lg truncate">{song.name}</h4>
-                    <p className="text-gray-600 dark:text-gray-400 truncate">
-                      {song.artist} • {song.album}
-                    </p>
-                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500">
-                      <span className="flex items-center space-x-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{song.duration_formatted || formatDuration(song.duration_ms)}</span>
-                      </span>
-                      <span className="flex items-center space-x-1">
-                        <Heart className="h-3 w-3" />
-                        <span>{song.popularity}% popular</span>
-                      </span>
-                      {song.explicit && (
-                        <span className="text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded">
-                          E
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1">
-                      {(() => {
-                        const previewStatus = getPreviewStatus(song);
-                        return (
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            previewStatus.available 
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' 
-                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-                          }`}>
-                            {previewStatus.message}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleShare(song)}
-                    >
-                      Share
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.open(song.external_urls.spotify, '_blank')}
-                      className="bg-green-600 hover:bg-green-700 text-white border-green-600"
-                    >
-                      <ExternalLink className="h-4 w-4 mr-1" />
-                      Open in Spotify
-                    </Button>
-                    {!song.preview_url && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(song.external_urls.spotify, '_blank')}
-                        className="bg-purple-600 hover:bg-purple-700 text-white border-purple-600"
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        Play Full Song
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* No Results */}
-      {searchQuery && searchResults.length === 0 && !loading && (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <Music className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <p className="text-gray-500">No songs found for "{searchQuery}"</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Try searching for a different song, artist, or album
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Popular Searches */}
-      {!searchQuery && searchResults.length === 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Popular Searches</CardTitle>
-            <CardDescription>
-              Try searching for these popular songs
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        {/* Popular searches */}
+        {!hasSearched && searchResults.length === 0 && (
+          <div className="mb-8">
+            <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Popular searches
+            </h2>
             <div className="flex flex-wrap gap-2">
-              {['Bohemian Rhapsody', 'Midnight City', 'Blinding Lights', 'Shape of You', 'Levitating'].map((term) => (
-                <Button
+              {POPULAR_TERMS.map((term) => (
+                <button
                   key={term}
-                  variant="outline"
-                  size="sm"
+                  type="button"
                   onClick={() => {
                     setSearchQuery(term);
                     handleSearch(term);
                   }}
+                  className="rounded-full border border-border bg-[var(--surface-container-high)] px-4 py-2 font-body text-sm text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10"
                 >
                   {term}
-                </Button>
+                </button>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+            Searching Spotify…
+          </div>
+        )}
+
+        {/* Results */}
+        {!loading && searchResults.length > 0 && (
+          <div>
+            <p className="mb-3 font-display text-sm font-semibold text-muted-foreground">
+              {searchResults.length} result{searchResults.length !== 1 ? "s" : ""}
+            </p>
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 border-b border-border px-4 py-3 font-display text-xs font-semibold uppercase tracking-wider text-muted-foreground max-sm:hidden sm:grid-cols-[auto_1fr_1fr_auto_auto]">
+                <span className="w-8 text-center">#</span>
+                <span>Title</span>
+                <span className="hidden sm:block">Album</span>
+                <span className="hidden w-16 text-right sm:block">
+                  <Clock className="ml-auto h-3.5 w-3.5" />
+                </span>
+                <span className="w-10" />
+              </div>
+
+              {searchResults.map((song, index) => {
+                const active = currentTrack?.id === song.id;
+                return (
+                  <div
+                    key={song.id}
+                    className={cn(
+                      "group grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-2.5 transition-colors sm:grid-cols-[auto_1fr_1fr_auto_auto]",
+                      active
+                        ? "bg-primary/10"
+                        : "hover:bg-[var(--surface-container-high)]"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handlePlay(song)}
+                      className="flex w-8 items-center justify-center border-none bg-transparent font-body text-sm tabular-nums text-muted-foreground"
+                    >
+                      {active && isPlaying ? (
+                        <span className="flex h-3.5 items-end gap-0.5">
+                          <span className="inline-block h-full w-0.5 animate-pulse bg-primary" />
+                          <span
+                            className="inline-block h-2/3 w-0.5 animate-pulse bg-primary"
+                            style={{ animationDelay: "0.15s" }}
+                          />
+                          <span
+                            className="inline-block h-full w-0.5 animate-pulse bg-primary"
+                            style={{ animationDelay: "0.3s" }}
+                          />
+                        </span>
+                      ) : (
+                        index + 1
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handlePlay(song)}
+                      className="flex min-w-0 items-center gap-3 border-none bg-transparent p-0 text-left"
+                    >
+                      {song.images?.[0]?.url ? (
+                        <img
+                          src={song.images[0].url}
+                          alt={song.album}
+                          className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <Music2 className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p
+                          className={cn(
+                            "truncate font-display text-sm font-semibold",
+                            active ? "text-primary" : "text-foreground"
+                          )}
+                        >
+                          {song.name}
+                          {song.explicit && (
+                            <span className="ml-2 inline-flex rounded px-1 py-0.5 font-body text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                              E
+                            </span>
+                          )}
+                        </p>
+                        <p className="truncate font-body text-xs text-muted-foreground">
+                          {song.artist}
+                        </p>
+                      </div>
+                    </button>
+
+                    <p className="hidden truncate font-body text-sm text-muted-foreground sm:block">
+                      {song.album}
+                    </p>
+
+                    <span className="hidden w-16 text-right font-body text-xs tabular-nums text-muted-foreground sm:block">
+                      {song.duration_formatted || formatDuration(song.duration_ms)}
+                    </span>
+
+                    <div className="flex w-10 items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handlePlay(song)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full border-none bg-transparent text-muted-foreground opacity-0 transition-all hover:bg-primary/15 hover:text-primary group-hover:opacity-100"
+                        aria-label={active && isPlaying ? "Pause" : "Play"}
+                      >
+                        {active && isPlaying ? (
+                          <Pause className="h-4 w-4" />
+                        ) : (
+                          <Play className="h-4 w-4" />
+                        )}
+                      </button>
+                      {song.external_urls?.spotify && (
+                        <a
+                          href={song.external_urls.spotify}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-all hover:bg-[var(--surface-container-high)] hover:text-foreground group-hover:opacity-100"
+                          aria-label="Open in Spotify"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* No results */}
+        {!loading && hasSearched && searchResults.length === 0 && (
+          <div className="rounded-2xl border border-border bg-card py-16 text-center">
+            <Music2 className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+            <p className="font-display text-lg font-semibold text-foreground">
+              No results for &ldquo;{searchQuery}&rdquo;
+            </p>
+            <p className="mt-1 font-body text-sm text-muted-foreground">
+              Try a different song, artist, or album name.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

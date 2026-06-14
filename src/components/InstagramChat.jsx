@@ -132,18 +132,18 @@ export function InstagramChat() {
   };
 
   return (
-    <div className="flex h-screen bg-[#121212] text-white">
+    <div className="flex h-full bg-background text-foreground">
       {/* Sidebar */}
-      <div className="w-80 bg-[#1a1a1a] border-r border-[#2a2a2a] flex flex-col">
+      <div className="flex w-80 flex-col border-r border-border bg-card">
         {/* Header */}
-        <div className="p-4 border-b border-[#2a2a2a]">
+        <div className="border-b border-border p-4">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold">Messages</h1>
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                 <Plus className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                 <MoreHorizontal className="w-5 h-5" />
               </Button>
             </div>
@@ -151,10 +151,10 @@ export function InstagramChat() {
           
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search messages"
-              className="pl-10 bg-[#2a2a2a] border-[#404040] text-white placeholder-[#6b7280] focus:border-[#1db954]"
+              className="pl-10 bg-[var(--surface-container-high)] border-border text-foreground placeholder:text-muted-foreground focus:border-[var(--spotify-green)]"
             />
           </div>
         </div>
@@ -165,31 +165,31 @@ export function InstagramChat() {
             <div
               key={chat.id}
               onClick={() => setSelectedChat(chat.id)}
-              className={`flex items-center space-x-3 p-4 hover:bg-[#2a2a2a] cursor-pointer transition-colors ${
-                selectedChat === chat.id ? 'bg-[#2a2a2a] border-r-2 border-[#1db954]' : ''
+              className={`flex items-center space-x-3 p-4 hover:bg-[var(--surface-container-high)] cursor-pointer transition-colors ${
+                selectedChat === chat.id ? 'bg-[var(--surface-container-high)] border-r-2 border-[var(--spotify-green)]' : ''
               }`}
             >
               <div className="relative">
                 <Avatar className="w-12 h-12">
                   <AvatarImage src={chat.avatar} />
-                  <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                  <AvatarFallback className="bg-primary text-primary-foreground">
                     {chat.name[0]}
                   </AvatarFallback>
                 </Avatar>
                 {chat.isOnline && (
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#1db954] rounded-full border-2 border-[#1a1a1a]"></div>
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[var(--spotify-green)] border-2 border-card"></div>
                 )}
               </div>
               
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-sm truncate">{chat.name}</h3>
-                  <span className="text-xs text-[#6b7280]">{chat.time}</span>
+                  <span className="text-xs text-muted-foreground">{chat.time}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-[#b3b3b3] truncate">{chat.lastMessage}</p>
+                  <p className="text-sm text-muted-foreground truncate">{chat.lastMessage}</p>
                   {chat.unread > 0 && (
-                    <div className="bg-[#1db954] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    <div className="bg-[var(--spotify-green)] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                       {chat.unread}
                     </div>
                   )}
@@ -205,30 +205,30 @@ export function InstagramChat() {
         {selectedChat ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-[#2a2a2a] bg-[#1a1a1a]">
+            <div className="p-4 border-b border-border bg-[var(--surface-container-high)] bg-card">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <Avatar className="w-10 h-10">
                     <AvatarImage src={chats.find(c => c.id === selectedChat)?.avatar} />
-                    <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
                       {chats.find(c => c.id === selectedChat)?.name[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div>
                     <h2 className="font-semibold">{chats.find(c => c.id === selectedChat)?.name}</h2>
-                    <p className="text-sm text-[#b3b3b3]">
+                    <p className="text-sm text-muted-foreground">
                       {chats.find(c => c.id === selectedChat)?.isOnline ? 'Online' : 'Last seen recently'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                     <Phone className="w-5 h-5" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                     <Video className="w-5 h-5" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                     <MoreHorizontal className="w-5 h-5" />
                   </Button>
                 </div>
@@ -246,7 +246,7 @@ export function InstagramChat() {
                     {!message.isMe && (
                       <Avatar className="w-8 h-8">
                         <AvatarImage src={message.avatar} />
-                        <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white text-xs">
+                        <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                           {message.sender[0]}
                         </AvatarFallback>
                       </Avatar>
@@ -254,14 +254,14 @@ export function InstagramChat() {
                     
                     <div className={`space-y-1 ${message.isMe ? 'items-end' : 'items-start'}`}>
                       {!message.isMe && (
-                        <p className="text-xs text-[#6b7280] px-2">{message.sender}</p>
+                        <p className="text-xs text-muted-foreground px-2">{message.sender}</p>
                       )}
                       
                       <div
                         className={`px-4 py-2 rounded-2xl ${
                           message.isMe
-                            ? 'bg-[#1db954] text-white'
-                            : 'bg-[#2a2a2a] text-white'
+                            ? 'bg-[var(--spotify-green)] text-white'
+                            : 'bg-[var(--surface-container-high)] text-foreground'
                         }`}
                       >
                         <p className="text-sm">{message.content}</p>
@@ -270,7 +270,7 @@ export function InstagramChat() {
                         {message.music && (
                           <div className="mt-2 bg-black/20 rounded-lg p-3">
                             <div className="flex items-center space-x-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded flex items-center justify-center">
+                              <div className="flex h-10 w-10 items-center justify-center rounded bg-primary">
                                 <Music className="w-5 h-5 text-white" />
                               </div>
                               <div className="flex-1 min-w-0">
@@ -286,7 +286,7 @@ export function InstagramChat() {
                         )}
                       </div>
                       
-                      <p className="text-xs text-[#6b7280] px-2">{message.time}</p>
+                      <p className="text-xs text-muted-foreground px-2">{message.time}</p>
                     </div>
                   </div>
                 </div>
@@ -296,15 +296,15 @@ export function InstagramChat() {
                 <div className="flex justify-start">
                   <div className="flex space-x-2">
                     <Avatar className="w-8 h-8">
-                      <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white text-xs">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                         A
                       </AvatarFallback>
                     </Avatar>
-                    <div className="bg-[#2a2a2a] px-4 py-2 rounded-2xl">
+                    <div className="bg-[var(--surface-container-high)] px-4 py-2 rounded-2xl">
                       <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-[#6b7280] rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-[#6b7280] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-2 h-2 bg-[#6b7280] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       </div>
                     </div>
                   </div>
@@ -313,18 +313,18 @@ export function InstagramChat() {
             </div>
 
             {/* Message Input */}
-            <div className="p-4 border-t border-[#2a2a2a] bg-[#1a1a1a]">
+            <div className="p-4 border-t border-border bg-[var(--surface-container-high)] bg-card">
               <div className="flex items-center space-x-2">
-                <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                   <Plus className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                   <Camera className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                   <ImageIcon className="w-5 h-5" />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-[#b3b3b3] hover:text-white">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                   <Music className="w-5 h-5" />
                 </Button>
                 
@@ -334,12 +334,12 @@ export function InstagramChat() {
                     onChange={(e) => setMessageText(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Message..."
-                    className="bg-[#2a2a2a] border-[#404040] text-white placeholder-[#6b7280] focus:border-[#1db954] pr-12"
+                    className="bg-[var(--surface-container-high)] border-border text-foreground placeholder:text-muted-foreground focus:border-[var(--spotify-green)] pr-12"
                   />
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[#b3b3b3] hover:text-white"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     <Smile className="w-5 h-5" />
                   </Button>
@@ -348,7 +348,7 @@ export function InstagramChat() {
                 <Button
                   onClick={handleSendMessage}
                   disabled={!messageText.trim()}
-                  className="bg-[#1db954] hover:bg-[#1ed760] text-white disabled:opacity-50"
+                  className="bg-[var(--spotify-green)] text-white hover:bg-[var(--spotify-green)]/90 disabled:opacity-50"
                 >
                   <Send className="w-5 h-5" />
                 </Button>
@@ -358,11 +358,11 @@ export function InstagramChat() {
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-primary">
                 <Music className="w-12 h-12 text-white" />
               </div>
               <h2 className="text-2xl font-bold mb-2">Your Messages</h2>
-              <p className="text-[#b3b3b3]">Send and receive messages about music</p>
+              <p className="text-muted-foreground">Send and receive messages about music</p>
             </div>
           </div>
         )}

@@ -107,34 +107,35 @@ export function RedditFeed() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
+    <div className="page-scroll">
+      <div className="page-content space-y-6">
       {/* Header */}
-      <div className="text-center space-y-2 mb-8">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
+      <div className="space-y-2 text-center">
+        <h1 className="font-display text-3xl font-bold text-primary">
           r/Music
         </h1>
-        <p className="text-[#b3b3b3]">The place for music lovers to share and discuss</p>
+        <p className="text-muted-foreground">The place for music lovers to share and discuss</p>
       </div>
 
       {/* Sort Options */}
-      <div className="flex items-center space-x-2 mb-6">
-        <Button variant="outline" size="sm" className="bg-[#1a1a1a] border-[#2a2a2a] text-white hover:bg-[#2a2a2a]">
+      <div className="mb-6 flex items-center space-x-2">
+        <Button variant="outline" size="sm" className="border-border bg-card text-foreground hover:bg-[var(--surface-container-high)]">
           Hot
         </Button>
-        <Button variant="outline" size="sm" className="bg-[#1a1a1a] border-[#2a2a2a] text-[#b3b3b3] hover:bg-[#2a2a2a] hover:text-white">
+        <Button variant="outline" size="sm" className="border-border bg-card text-muted-foreground hover:bg-[var(--surface-container-high)] hover:text-foreground">
           New
         </Button>
-        <Button variant="outline" size="sm" className="bg-[#1a1a1a] border-[#2a2a2a] text-[#b3b3b3] hover:bg-[#2a2a2a] hover:text-white">
+        <Button variant="outline" size="sm" className="border-border bg-card text-muted-foreground hover:bg-[var(--surface-container-high)] hover:text-foreground">
           Top
         </Button>
-        <Button variant="outline" size="sm" className="bg-[#1a1a1a] border-[#2a2a2a] text-[#b3b3b3] hover:bg-[#2a2a2a] hover:text-white">
+        <Button variant="outline" size="sm" className="border-border bg-card text-muted-foreground hover:bg-[var(--surface-container-high)] hover:text-foreground">
           Rising
         </Button>
       </div>
 
       {/* Posts */}
       {posts.map((post) => (
-        <Card key={post.id} className="bg-[#1a1a1a] border-[#2a2a2a] hover:border-[#404040] transition-colors">
+        <Card key={post.id} className="border-border bg-card transition-colors hover:border-primary/20">
           <CardContent className="p-0">
             <div className="flex">
               {/* Voting Sidebar */}
@@ -146,7 +147,7 @@ export function RedditFeed() {
                   className={`p-1 h-8 w-8 ${
                     votedPosts[post.id] === 'up' 
                       ? 'text-orange-500 bg-orange-500/10' 
-                      : 'text-[#6b7280] hover:text-orange-500 hover:bg-orange-500/10'
+                      : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10'
                   }`}
                 >
                   <ChevronUp className="h-4 w-4" />
@@ -161,7 +162,7 @@ export function RedditFeed() {
                   className={`p-1 h-8 w-8 ${
                     votedPosts[post.id] === 'down' 
                       ? 'text-blue-500 bg-blue-500/10' 
-                      : 'text-[#6b7280] hover:text-blue-500 hover:bg-blue-500/10'
+                      : 'text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10'
                   }`}
                 >
                   <ChevronDown className="h-4 w-4" />
@@ -180,10 +181,10 @@ export function RedditFeed() {
                   {post.author.verified && (
                     <span className="text-xs bg-blue-500 text-white px-1 rounded">✓</span>
                   )}
-                  <span className="text-xs text-[#6b7280]">•</span>
-                  <span className="text-xs text-[#6b7280]">r/{post.subreddit}</span>
-                  <span className="text-xs text-[#6b7280]">•</span>
-                  <span className="text-xs text-[#6b7280]">{post.timeAgo}</span>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="text-xs text-muted-foreground">r/{post.subreddit}</span>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="text-xs text-muted-foreground">{post.timeAgo}</span>
                 </div>
 
                 {/* Title */}
@@ -193,7 +194,7 @@ export function RedditFeed() {
 
                 {/* Music Preview */}
                 {post.music && (
-                  <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg p-3 mb-3 text-white">
+                  <div className="mb-3 rounded-lg bg-primary/80 p-3 text-primary-foreground">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <h4 className="font-semibold">{post.music.title}</h4>
@@ -211,7 +212,7 @@ export function RedditFeed() {
                 )}
 
                 {/* Content */}
-                <p className="text-[#b3b3b3] mb-3 whitespace-pre-wrap">
+                <p className="text-muted-foreground mb-3 whitespace-pre-wrap">
                   {post.content}
                 </p>
 
@@ -221,7 +222,7 @@ export function RedditFeed() {
                     {post.tags.map((tag, index) => (
                       <span
                         key={index}
-                        className="text-xs bg-[#2a2a2a] text-[#b3b3b3] px-2 py-1 rounded-full"
+                        className="text-xs bg-[var(--surface-container-high)] text-muted-foreground px-2 py-1 rounded-full"
                       >
                         #{tag}
                       </span>
@@ -243,7 +244,7 @@ export function RedditFeed() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-[#6b7280] hover:text-white hover:bg-[#2a2a2a]"
+                    className="text-muted-foreground hover:text-white hover:bg-[var(--surface-container-high)]"
                   >
                     <MessageCircle className="h-4 w-4 mr-1" />
                     <span className="text-sm">{post.comments}</span>
@@ -251,7 +252,7 @@ export function RedditFeed() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-[#6b7280] hover:text-white hover:bg-[#2a2a2a]"
+                    className="text-muted-foreground hover:text-white hover:bg-[var(--surface-container-high)]"
                   >
                     <Share2 className="h-4 w-4 mr-1" />
                     <span className="text-sm">Share</span>
@@ -259,7 +260,7 @@ export function RedditFeed() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-[#6b7280] hover:text-white hover:bg-[#2a2a2a]"
+                    className="text-muted-foreground hover:text-white hover:bg-[var(--surface-container-high)]"
                   >
                     <Bookmark className="h-4 w-4 mr-1" />
                     <span className="text-sm">Save</span>
@@ -267,7 +268,7 @@ export function RedditFeed() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-[#6b7280] hover:text-white hover:bg-[#2a2a2a]"
+                    className="text-muted-foreground hover:text-white hover:bg-[var(--surface-container-high)]"
                   >
                     <Award className="h-4 w-4 mr-1" />
                     <span className="text-sm">Award</span>
@@ -275,7 +276,7 @@ export function RedditFeed() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-[#6b7280] hover:text-white hover:bg-[#2a2a2a] ml-auto"
+                    className="text-muted-foreground hover:text-white hover:bg-[var(--surface-container-high)] ml-auto"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
@@ -290,10 +291,11 @@ export function RedditFeed() {
       <div className="text-center py-8">
         <Button 
           variant="outline" 
-          className="bg-[#1a1a1a] border-[#2a2a2a] text-white hover:bg-[#2a2a2a]"
+          className="border-border bg-card text-foreground hover:bg-[var(--surface-container-high)]"
         >
           Load More Posts
         </Button>
+      </div>
       </div>
     </div>
   );

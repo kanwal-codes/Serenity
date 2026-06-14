@@ -144,6 +144,47 @@ class SpotifyAPI {
   }
 
   /**
+   * Refresh an expired access token using the stored refresh token
+   */
+  async refreshAccessToken() {
+    if (typeof window === 'undefined') return null;
+
+    const refreshToken = localStorage.getItem('spotify_refresh_token');
+    if (!refreshToken) return null;
+
+    try {
+      const response = await fetch('/api/spotify/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!response.ok) {
+        localStorage.removeItem('spotify_refresh_token');
+        return null;
+      }
+
+      const data = await response.json();
+      this.accessToken = data.access_token;
+      localStorage.setItem('spotify_access_token', data.access_token);
+
+      if (data.expires_in) {
+        const expiresAt = Date.now() + parseInt(data.expires_in, 10) * 1000;
+        localStorage.setItem('spotify_expires_at', String(expiresAt));
+      }
+
+      if (data.refresh_token) {
+        localStorage.setItem('spotify_refresh_token', data.refresh_token);
+      }
+
+      return data.access_token;
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      return null;
+    }
+  }
+
+  /**
    * Get access token from various sources
    * 
    * This method is async because it may need to exchange an authorization code
@@ -205,11 +246,19 @@ class SpotifyAPI {
         this.accessToken = storedToken;
         return storedToken;
       }
-      // Token expired, clean up
+      // Token expired — try refresh before forcing re-login
       this.accessToken = null;
       localStorage.removeItem('spotify_access_token');
       localStorage.removeItem('spotify_expires_at');
-      // TODO: Implement refresh token flow to get new access token
+
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) return refreshed;
+    }
+
+    // Access token missing but refresh token may still be valid
+    if (typeof window !== 'undefined' && localStorage.getItem('spotify_refresh_token')) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) return refreshed;
     }
 
     return null;
@@ -238,7 +287,6 @@ class SpotifyAPI {
       const message = 'Spotify is not configured. Set NEXT_PUBLIC_SPOTIFY_CLIENT_ID and NEXT_PUBLIC_SPOTIFY_REDIRECT_URI, then restart the dev server.';
       console.warn(message);
       if (typeof window !== 'undefined') {
-        // eslint-disable-next-line no-alert
         alert(message);
       }
       return;
@@ -259,6 +307,7 @@ class SpotifyAPI {
       'playlist-read-private',
       'playlist-read-collaborative',
       'user-library-read',
+      'user-library-modify',
       'user-read-playback-state',
       'user-modify-playback-state',
       'user-read-currently-playing'
@@ -299,21 +348,25 @@ class SpotifyAPI {
    * @returns {Promise<object>} JSON response from API
    */
   async makeRequest(endpoint, options = {}) {
+    const { allowStatuses = [], ...fetchOptions } = options;
     const token = await this.getAccessToken(); // Async because token might need exchange
     if (!token) {
       throw new Error('No access token available. Please authorize first.');
     }
 
     const response = await fetch(`${SPOTIFY_API_BASE}${endpoint}`, {
-      ...options,
+      ...fetchOptions,
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...fetchOptions.headers,
       },
     });
 
     if (!response.ok) {
+      if (allowStatuses.includes(response.status)) {
+        return null;
+      }
       if (response.status === 401) {
         // Token expired or invalid, clear it and prompt re-authorization
         this.accessToken = null;
@@ -324,7 +377,17 @@ class SpotifyAPI {
       throw new Error(`Spotify API error: ${response.status}`);
     }
 
-    return response.json();
+    // Spotify returns 204 No Content for play/pause/seek/device transfer
+    if (response.status === 204) {
+      return null;
+    }
+
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+
+    return JSON.parse(text);
   }
 
   /**
@@ -427,6 +490,115 @@ class SpotifyAPI {
   }
 
   /**
+   * Get user's top artists
+   *
+   * @param {string} timeRange - 'short_term', 'medium_term', or 'long_term'
+   * @param {number} limit - Maximum number of results
+   * @returns {Promise<Array>} Array of artist objects
+   */
+  async getTopArtists(timeRange = 'medium_term', limit = 20) {
+    try {
+      const response = await this.makeRequest(
+        `/me/top/artists?time_range=${timeRange}&limit=${limit}`
+      );
+
+      return response.items.map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        genres: artist.genres || [],
+        images: artist.images,
+        external_urls: artist.external_urls,
+        popularity: artist.popularity,
+      }));
+    } catch (error) {
+      console.error('Error getting top artists:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get track recommendations based on seed artists and/or tracks
+   */
+  async getRecommendations({
+    seedArtists = [],
+    seedTracks = [],
+    seedGenres = [],
+    limit = 12,
+  } = {}) {
+    const mapTracks = (response) =>
+      (response?.tracks || []).map((track) => ({
+        id: track.id,
+        name: track.name,
+        artist: track.artists?.map((a) => a.name).join(', ') || 'Unknown Artist',
+        album: track.album?.name || '',
+        preview_url: track.preview_url,
+        external_urls: track.external_urls,
+        duration_ms: track.duration_ms,
+        popularity: track.popularity,
+        images: track.album?.images || [],
+        uri: track.uri,
+      }));
+
+    const attempts = [
+      {
+        artists: seedArtists.filter(Boolean).slice(0, 2),
+        tracks: seedTracks.filter(Boolean).slice(0, 3),
+        genres: [],
+      },
+      {
+        artists: seedArtists.filter(Boolean).slice(0, 3),
+        tracks: [],
+        genres: [],
+      },
+      {
+        artists: [],
+        tracks: seedTracks.filter(Boolean).slice(0, 5),
+        genres: [],
+      },
+      {
+        artists: [],
+        tracks: [],
+        genres: seedGenres.filter(Boolean).slice(0, 2),
+      },
+    ];
+
+    try {
+      for (const attempt of attempts) {
+        const seedCount =
+          attempt.artists.length + attempt.tracks.length + attempt.genres.length;
+        if (seedCount === 0 || seedCount > 5) continue;
+
+        const params = new URLSearchParams({
+          limit: String(limit),
+          market: 'from_token',
+        });
+        if (attempt.artists.length) {
+          params.set('seed_artists', attempt.artists.join(','));
+        }
+        if (attempt.tracks.length) {
+          params.set('seed_tracks', attempt.tracks.join(','));
+        }
+        if (attempt.genres.length) {
+          params.set('seed_genres', attempt.genres.join(','));
+        }
+
+        const response = await this.makeRequest(
+          `/recommendations?${params.toString()}`,
+          { allowStatuses: [404] }
+        );
+        if (response?.tracks?.length) {
+          return mapTracks(response);
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error getting recommendations:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get recently played tracks
    * 
    * @param {number} limit - Maximum number of results
@@ -458,25 +630,234 @@ class SpotifyAPI {
   }
 
   /**
-   * Play track on user's active Spotify device
-   * 
-   * IMPORTANT: This requires Spotify Premium and an active device.
-   * Returns false if user doesn't have Premium or no device is active.
-   * 
-   * @param {string} trackUri - Spotify track URI (e.g., 'spotify:track:...')
-   * @returns {Promise<boolean>} Success status
+   * List user's Spotify Connect devices
    */
-  async playTrack(trackUri) {
+  async getDevices() {
     try {
-      await this.makeRequest('/me/player/play', {
+      const data = await this.makeRequest('/me/player/devices');
+      return data.devices || [];
+    } catch (error) {
+      console.error('Error getting devices:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Activate a Spotify Connect device so playback commands work
+   */
+  async ensureActiveDevice() {
+    const devices = await this.getDevices();
+    if (devices.length === 0) return null;
+
+    const active = devices.find((d) => d.is_active);
+    if (active) return active.id;
+
+    const preferred =
+      devices.find((d) => d.type === 'Computer') ||
+      devices.find((d) => d.type === 'Smartphone') ||
+      devices[0];
+
+    await this.makeRequest('/me/player', {
+      method: 'PUT',
+      body: JSON.stringify({
+        device_ids: [preferred.id],
+        play: false,
+      }),
+    });
+
+    return preferred.id;
+  }
+
+  /**
+   * Get full playback state including progress
+   */
+  async getPlayerState() {
+    try {
+      const token = await this.getAccessToken();
+      if (!token) return null;
+
+      const response = await fetch(`${SPOTIFY_API_BASE}/me/player`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 204 || !response.ok) return null;
+
+      const data = await response.json();
+      if (!data?.item) return null;
+
+      const track = data.item;
+      return {
+        is_playing: data.is_playing,
+        progress_ms: data.progress_ms,
+        id: track.id,
+        name: track.name,
+        artist: track.artists?.map((a) => a.name).join(", ") || "Unknown Artist",
+        album: track.album?.name || "",
+        duration_ms: track.duration_ms,
+        uri: track.uri,
+        preview_url: track.preview_url,
+        external_urls: track.external_urls,
+        images: track.album?.images || [],
+        device: data.device?.name,
+      };
+    } catch (error) {
+      console.error('Error getting player state:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Play track on user's active Spotify device
+   *
+   * Requires Spotify Premium and an available Connect device.
+   * @param {string} trackUri
+   * @param {number} [positionMs] - Start position in milliseconds (for resume)
+   */
+  async playTrack(trackUri, positionMs) {
+    try {
+      const deviceId = await this.ensureActiveDevice();
+      const endpoint = deviceId
+        ? `/me/player/play?device_id=${encodeURIComponent(deviceId)}`
+        : '/me/player/play';
+
+      const body = { uris: [trackUri] };
+      if (positionMs != null && positionMs > 0) {
+        body.position_ms = Math.floor(positionMs);
+      }
+
+      await this.makeRequest(endpoint, {
         method: 'PUT',
-        body: JSON.stringify({
-          uris: [trackUri]
-        })
+        body: JSON.stringify(body),
       });
       return true;
     } catch (error) {
       console.error('Error playing track:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Pause Spotify playback
+   */
+  async pausePlayback() {
+    try {
+      await this.makeRequest('/me/player/pause', { method: 'PUT' });
+      return true;
+    } catch (error) {
+      console.error('Error pausing playback:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Resume Spotify playback on the active device
+   */
+  async resumePlayback() {
+    try {
+      await this.makeRequest('/me/player/play', { method: 'PUT' });
+      return true;
+    } catch (error) {
+      console.error('Error resuming playback:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Seek to position in the currently playing track
+   */
+  async seekPlayback(positionMs) {
+    try {
+      await this.makeRequest(
+        `/me/player/seek?position_ms=${Math.floor(positionMs)}`,
+        { method: 'PUT' }
+      );
+      return true;
+    } catch (error) {
+      console.error('Error seeking playback:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Set playback volume on the active Spotify Connect device (0–100)
+   */
+  async setDeviceVolume(volumePercent) {
+    try {
+      const v = Math.max(0, Math.min(100, Math.round(volumePercent)));
+      await this.makeRequest(
+        `/me/player/volume?volume_percent=${v}`,
+        { method: 'PUT' }
+      );
+      return true;
+    } catch (error) {
+      console.error('Error setting device volume:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Skip to next track on the active device
+   */
+  async skipToNext() {
+    try {
+      await this.makeRequest('/me/player/next', { method: 'POST' });
+      return true;
+    } catch (error) {
+      console.error('Error skipping to next:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Skip to previous track on the active device
+   */
+  async skipToPrevious() {
+    try {
+      await this.makeRequest('/me/player/previous', { method: 'POST' });
+      return true;
+    } catch (error) {
+      console.error('Error skipping to previous:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check whether tracks are saved in the user's library
+   */
+  async checkSavedTracks(trackIds) {
+    try {
+      const ids = trackIds.filter(Boolean).join(',');
+      if (!ids) return [];
+      const result = await this.makeRequest(`/me/tracks/contains?ids=${ids}`);
+      return Array.isArray(result) ? result : [];
+    } catch (error) {
+      console.error('Error checking saved tracks:', error);
+      return trackIds.map(() => false);
+    }
+  }
+
+  /**
+   * Save a track to the user's Liked Songs
+   */
+  async saveTrack(trackId) {
+    try {
+      await this.makeRequest(`/me/tracks?ids=${trackId}`, { method: 'PUT' });
+      return true;
+    } catch (error) {
+      console.error('Error saving track:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove a track from the user's Liked Songs
+   */
+  async removeSavedTrack(trackId) {
+    try {
+      await this.makeRequest(`/me/tracks?ids=${trackId}`, { method: 'DELETE' });
+      return true;
+    } catch (error) {
+      console.error('Error removing saved track:', error);
       return false;
     }
   }
@@ -496,6 +877,87 @@ class SpotifyAPI {
   }
 
   /**
+   * Clear stored Spotify session (disconnect)
+   */
+  clearSession() {
+    this.accessToken = null;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('spotify_access_token');
+      localStorage.removeItem('spotify_expires_at');
+      localStorage.removeItem('spotify_refresh_token');
+      sessionStorage.removeItem('spotify_code_verifier');
+    }
+  }
+
+  /**
+   * Get current user's playlists
+   *
+   * @param {number} limit - Maximum number of playlists
+   * @returns {Promise<Array>} Array of playlist objects
+   */
+  async getUserPlaylists(limit = 20) {
+    try {
+      const response = await this.makeRequest(`/me/playlists?limit=${limit}`);
+
+      return response.items.map((playlist) => ({
+        id: playlist.id,
+        name: playlist.name,
+        description: playlist.description,
+        images: playlist.images,
+        external_urls: playlist.external_urls,
+        tracks: playlist.tracks,
+        owner: playlist.owner,
+      }));
+    } catch (error) {
+      console.error('Error getting user playlists:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get currently playing track from Spotify
+   *
+   * @returns {Promise<object|null>} Currently playing item or null
+   */
+  async getCurrentlyPlaying() {
+    try {
+      const token = await this.getAccessToken();
+      if (!token) return null;
+
+      const response = await fetch(`${SPOTIFY_API_BASE}/me/player/currently-playing`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.status === 204 || !response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      if (!data?.item) return null;
+
+      const track = data.item;
+      return {
+        id: track.id,
+        name: track.name,
+        artist: track.artists[0]?.name || 'Unknown Artist',
+        album: track.album.name,
+        preview_url: track.preview_url,
+        external_urls: track.external_urls,
+        duration_ms: track.duration_ms,
+        images: track.album.images,
+        uri: track.uri,
+        duration_formatted: this.formatDuration(track.duration_ms),
+        is_playing: data.is_playing,
+      };
+    } catch (error) {
+      console.error('Error getting currently playing:', error);
+      return null;
+    }
+  }
+
+  /**
    * Format duration from milliseconds to MM:SS
    * 
    * @param {number} ms - Duration in milliseconds
@@ -505,6 +967,135 @@ class SpotifyAPI {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Normalize a Spotify API track object to app format
+   */
+  normalizeTrack(track) {
+    if (!track?.id) return null;
+
+    return {
+      id: track.id,
+      name: track.name,
+      artist: track.artists?.map((a) => a.name).join(', ') || 'Unknown Artist',
+      artists: track.artists?.map((a) => a.name) || [],
+      album: track.album?.name || '',
+      preview_url: track.preview_url,
+      external_urls: track.external_urls,
+      duration_ms: track.duration_ms,
+      popularity: track.popularity,
+      images: track.album?.images || [],
+      uri: track.uri,
+      explicit: track.explicit,
+      duration_formatted: this.formatDuration(track.duration_ms),
+      has_preview: !!track.preview_url,
+    };
+  }
+
+  /**
+   * Get a single playlist by ID
+   */
+  async getPlaylist(playlistId) {
+    try {
+      const playlist = await this.makeRequest(`/playlists/${playlistId}?market=US`);
+      return {
+        id: playlist.id,
+        name: playlist.name,
+        description: playlist.description,
+        images: playlist.images,
+        external_urls: playlist.external_urls,
+        owner: playlist.owner,
+        tracks: playlist.tracks,
+      };
+    } catch (error) {
+      console.error('Error getting playlist:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get tracks in a playlist (paginated)
+   */
+  async getPlaylistTracks(playlistId, limit = 50, offset = 0) {
+    try {
+      const response = await this.makeRequest(
+        `/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&market=US`
+      );
+
+      const items = response.items
+        .map((item) => this.normalizeTrack(item.track))
+        .filter(Boolean);
+
+      return {
+        items,
+        total: response.total,
+        hasMore: !!response.next,
+      };
+    } catch (error) {
+      console.error('Error getting playlist tracks:', error);
+      return { items: [], total: 0, hasMore: false };
+    }
+  }
+
+  /**
+   * Get all tracks in a playlist (auto-paginate up to maxTracks)
+   */
+  async getAllPlaylistTracks(playlistId, maxTracks = 200) {
+    const allItems = [];
+    let offset = 0;
+    const pageSize = 50;
+
+    while (allItems.length < maxTracks) {
+      const { items, hasMore } = await this.getPlaylistTracks(playlistId, pageSize, offset);
+      allItems.push(...items);
+      if (!hasMore || items.length === 0) break;
+      offset += pageSize;
+    }
+
+    return allItems.slice(0, maxTracks);
+  }
+
+  /**
+   * Get user's saved (liked) tracks
+   */
+  async getSavedTracks(limit = 50, offset = 0) {
+    try {
+      const response = await this.makeRequest(
+        `/me/tracks?limit=${limit}&offset=${offset}&market=US`
+      );
+
+      const items = response.items
+        .map((item) => this.normalizeTrack(item.track))
+        .filter(Boolean);
+
+      return {
+        items,
+        total: response.total,
+        hasMore: !!response.next,
+      };
+    } catch (error) {
+      console.error('Error getting saved tracks:', error);
+      return { items: [], total: 0, hasMore: false };
+    }
+  }
+
+  /**
+   * Get all saved tracks (auto-paginate)
+   */
+  async getAllSavedTracks(maxTracks = 200) {
+    const allItems = [];
+    let offset = 0;
+    const pageSize = 50;
+
+    while (allItems.length < maxTracks) {
+      const { items, hasMore } = await this.getSavedTracks(pageSize, offset);
+      allItems.push(...items);
+      if (!hasMore || items.length === 0) break;
+      offset += pageSize;
+    }
+
+    return allItems.slice(0, maxTracks);
   }
 
   /**
@@ -582,12 +1173,169 @@ class SpotifyAPI {
         images: artist.images,
         external_urls: artist.external_urls,
         followers: artist.followers.total,
-        popularity: artist.popularity
+        popularity: artist.popularity,
+        uri: artist.uri,
       }));
     } catch (error) {
       console.error('Error searching artists:', error);
       return [];
     }
+  }
+
+  /**
+   * Get a single artist by ID
+   */
+  async getArtist(artistId) {
+    try {
+      const artist = await this.makeRequest(`/artists/${artistId}`);
+      return {
+        id: artist.id,
+        name: artist.name,
+        genres: artist.genres || [],
+        images: artist.images,
+        external_urls: artist.external_urls,
+        followers: artist.followers?.total ?? 0,
+        popularity: artist.popularity,
+        uri: artist.uri,
+      };
+    } catch (error) {
+      console.error('Error getting artist:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get an artist's top tracks
+   */
+  async getArtistTopTracks(artistId, limit = 10) {
+    try {
+      const response = await this.makeRequest(
+        `/artists/${artistId}/top-tracks?market=from_token`
+      );
+      return (response.tracks || [])
+        .slice(0, limit)
+        .map((track) => this.normalizeTrack(track))
+        .filter(Boolean);
+    } catch (error) {
+      console.error('Error getting artist top tracks:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get an artist's albums and singles
+   */
+  async getArtistAlbums(artistId, limit = 20) {
+    try {
+      const response = await this.makeRequest(
+        `/artists/${artistId}/albums?include_groups=album,single&limit=${limit}&market=from_token`
+      );
+      return (response.items || []).map((album) => ({
+        id: album.id,
+        name: album.name,
+        album_type: album.album_type,
+        images: album.images,
+        release_date: album.release_date,
+        total_tracks: album.total_tracks,
+        external_urls: album.external_urls,
+      }));
+    } catch (error) {
+      console.error('Error getting artist albums:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a single album by ID
+   */
+  async getAlbum(albumId) {
+    try {
+      const album = await this.makeRequest(
+        `/albums/${albumId}?market=from_token`
+      );
+      return {
+        id: album.id,
+        name: album.name,
+        artists: (album.artists || []).map((artist) => ({
+          id: artist.id,
+          name: artist.name,
+        })),
+        artist_names: (album.artists || []).map((artist) => artist.name).join(", "),
+        album_type: album.album_type,
+        images: album.images,
+        release_date: album.release_date,
+        total_tracks: album.total_tracks,
+        external_urls: album.external_urls,
+        label: album.label,
+      };
+    } catch (error) {
+      console.error("Error getting album:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get tracks on an album (paginated)
+   */
+  async getAlbumTracks(albumId, limit = 50, offset = 0, albumMeta = null) {
+    try {
+      const response = await this.makeRequest(
+        `/albums/${albumId}/tracks?limit=${limit}&offset=${offset}&market=from_token`
+      );
+
+      const albumContext = albumMeta
+        ? { name: albumMeta.name, images: albumMeta.images }
+        : { name: "", images: [] };
+
+      const items = (response.items || [])
+        .map((track) =>
+          this.normalizeTrack({
+            ...track,
+            album: albumContext,
+          })
+        )
+        .filter(Boolean);
+
+      return {
+        items,
+        total: response.total,
+        hasMore: !!response.next,
+      };
+    } catch (error) {
+      console.error("Error getting album tracks:", error);
+      return { items: [], total: 0, hasMore: false };
+    }
+  }
+
+  /**
+   * Get all tracks on an album (auto-paginate)
+   */
+  async getAllAlbumTracks(albumId, maxTracks = 200) {
+    const album = await this.getAlbum(albumId);
+    if (!album) {
+      return { album: null, tracks: [] };
+    }
+
+    const allItems = [];
+    let offset = 0;
+    const pageSize = 50;
+
+    while (allItems.length < maxTracks) {
+      const { items, hasMore } = await this.getAlbumTracks(
+        albumId,
+        pageSize,
+        offset,
+        album
+      );
+      allItems.push(...items);
+      if (!hasMore || items.length === 0) break;
+      offset += pageSize;
+    }
+
+    return {
+      album,
+      tracks: allItems.slice(0, maxTracks),
+    };
   }
 
   /**
