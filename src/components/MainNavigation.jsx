@@ -437,8 +437,12 @@ export function MainNavigation({
             onClick={() => onPageChange("home")}
             className="mb-5 flex cursor-pointer flex-col items-center gap-1 border-none bg-transparent outline-none"
           >
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-m3-primary">
-              <span className="font-display text-lg font-extrabold text-primary-foreground">S</span>
+            <div className="relative h-10 w-10 overflow-hidden rounded-full shadow-sm">
+              <img
+                src="/serenity-app-icon.png"
+                alt="Serenity"
+                className="h-full w-full object-cover"
+              />
               {isConnected && (
                 <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-[var(--spotify-green)]" />
               )}
