@@ -17,6 +17,10 @@ const inter = Inter({
 export const metadata = {
   title: "Serenity - Listen Together, Anywhere",
   description: "Social music web app where friends host listening parties with perfectly synced playback, live chat, and shared playlists.",
+  icons: {
+    icon: "/serenity-app-icon.png",
+    apple: "/serenity-app-icon.png",
+  },
 };
 
 export default function RootLayout({ children }) {
