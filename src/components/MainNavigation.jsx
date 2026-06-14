@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo, useLayoutEffect, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   Home,
   Search,
@@ -26,6 +26,7 @@ import {
   Music2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WaveProgressBar } from "@/components/WaveProgressBar";
 import { useSpotify } from "@/contexts/SpotifyContext";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { Button } from "@/components/ui/button";
@@ -398,222 +399,6 @@ function DragSlider({ value, onChange, ariaLabel, className }) {
   );
 }
 
-function buildWavePath(width, mid, amplitude, cycles) {
-  const steps = 120;
-  let d = "";
-  for (let i = 0; i <= steps; i++) {
-    const x = (i / steps) * width;
-    const y =
-      mid + amplitude * Math.sin((i / steps) * Math.PI * 2 * cycles);
-    d += `${i === 0 ? "M" : " L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-  }
-  return d;
-}
-
-function WaveSeekBar({ progress, onSeek, isPlaying, durationSec }) {
-  const barRef = useRef(null);
-  const wavePathRef = useRef(null);
-  const draggingRef = useRef(false);
-  const [isSeeking, setIsSeeking] = useState(false);
-  const pathLengthRef = useRef(0);
-  const targetProgressRef = useRef(progress);
-  const syncedProgressRef = useRef(progress);
-  const syncedAtRef = useRef(0);
-  const displayProgressRef = useRef(progress);
-  const percent = Math.max(0, Math.min(100, progress));
-  const viewWidth = 400;
-  const viewHeight = 16;
-
-  const wavePath = useMemo(
-    () => buildWavePath(viewWidth, viewHeight / 2, 5, 2),
-    []
-  );
-
-  const applyWaveStroke = useCallback((pct) => {
-    const path = wavePathRef.current;
-    const len = pathLengthRef.current;
-    if (!path || len <= 0) return;
-
-    const played = (pct / 100) * len;
-    if (played <= 0) {
-      path.setAttribute("stroke-width", "0");
-      path.removeAttribute("stroke-dasharray");
-      return;
-    }
-
-    path.setAttribute("stroke-width", "2");
-    path.setAttribute(
-      "stroke-dasharray",
-      `${played} ${Math.max(len - played, 0)}`
-    );
-  }, []);
-
-  const measurePath = useCallback(() => {
-    const node = wavePathRef.current;
-    if (!node) return;
-    pathLengthRef.current = node.getTotalLength();
-    applyWaveStroke(displayProgressRef.current);
-  }, [applyWaveStroke]);
-
-  useLayoutEffect(() => {
-    measurePath();
-  }, [measurePath, wavePath]);
-
-  useLayoutEffect(() => {
-    const bar = barRef.current;
-    if (!bar) return;
-    const observer = new ResizeObserver(measurePath);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, [measurePath]);
-
-  useEffect(() => {
-    targetProgressRef.current = progress;
-    syncedProgressRef.current = progress;
-    syncedAtRef.current = performance.now();
-    if (isSeeking || draggingRef.current) {
-      displayProgressRef.current = progress;
-      applyWaveStroke(progress);
-    }
-  }, [progress, isSeeking, applyWaveStroke]);
-
-  useEffect(() => {
-    let rafId;
-
-    const tick = (now) => {
-      let target = targetProgressRef.current;
-
-      if (
-        isPlaying &&
-        !isSeeking &&
-        !draggingRef.current &&
-        durationSec > 0
-      ) {
-        const elapsed = (now - syncedAtRef.current) / 1000;
-        const extrapolated =
-          syncedProgressRef.current + (elapsed / durationSec) * 100;
-        target = Math.min(100, Math.max(target, extrapolated));
-      }
-
-      const current = displayProgressRef.current;
-      const diff = target - current;
-      const next =
-        Math.abs(diff) < 0.04 ? target : current + diff * 0.14;
-
-      if (next !== current) {
-        displayProgressRef.current = next;
-        applyWaveStroke(next);
-      }
-
-      rafId = requestAnimationFrame(tick);
-    };
-
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, durationSec, isSeeking, applyWaveStroke]);
-
-  const fractionFromEvent = useCallback((clientX) => {
-    const bar = barRef.current;
-    if (!bar) return 0;
-    const rect = bar.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-  }, []);
-
-  const handleChange = useCallback(
-    (clientX) => {
-      onSeek(fractionFromEvent(clientX));
-    },
-    [fractionFromEvent, onSeek]
-  );
-
-  const handlePointerDown = useCallback(
-    (e) => {
-      draggingRef.current = true;
-      setIsSeeking(true);
-      barRef.current?.setPointerCapture(e.pointerId);
-      handleChange(e.clientX);
-    },
-    [handleChange]
-  );
-
-  const handlePointerMove = useCallback(
-    (e) => {
-      if (!draggingRef.current) return;
-      handleChange(e.clientX);
-    },
-    [handleChange]
-  );
-
-  const handlePointerUp = useCallback((e) => {
-    draggingRef.current = false;
-    barRef.current?.releasePointerCapture(e.pointerId);
-    setIsSeeking(false);
-  }, []);
-
-  return (
-    <div
-      ref={barRef}
-      role="slider"
-      aria-label="Seek"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(percent)}
-      className={cn(
-        "relative flex-1 cursor-pointer touch-none transition-[height] duration-200 ease-out",
-        isSeeking ? "h-1" : "h-4"
-      )}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-    >
-      <div
-        className={cn(
-          "absolute inset-0 overflow-hidden transition-opacity duration-200",
-          isSeeking ? "pointer-events-none opacity-0" : "opacity-100"
-        )}
-        aria-hidden={isSeeking}
-      >
-        <svg
-          viewBox={`0 0 ${viewWidth} ${viewHeight}`}
-          preserveAspectRatio="none"
-          className="h-full w-full"
-        >
-          <path
-            ref={wavePathRef}
-            d={wavePath}
-            fill="none"
-            stroke="var(--m3-primary)"
-            strokeWidth={0}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      </div>
-
-      <div
-        className={cn(
-          "absolute inset-0 transition-opacity duration-200",
-          isSeeking ? "opacity-100" : "pointer-events-none opacity-0"
-        )}
-        aria-hidden={!isSeeking}
-      >
-        <div className="relative h-full w-full rounded-sm bg-muted">
-          <div
-            className="pointer-events-none h-full rounded-sm bg-m3-primary"
-            style={{ width: `${percent}%` }}
-          />
-          <div
-            className="pointer-events-none absolute top-1/2 h-3 w-3 rounded-full bg-m3-primary"
-            style={{ left: `${percent}%`, transform: "translate(-50%, -50%)" }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function MainNavigation({
   currentPage,
   onPageChange,
@@ -819,7 +604,7 @@ export function MainNavigation({
               <span className="min-w-8 text-right font-body text-[11px] tabular-nums text-muted-foreground">
                 {currentTime}
               </span>
-              <WaveSeekBar
+              <WaveProgressBar
                 progress={progress}
                 onSeek={seek}
                 isPlaying={isPlaying}
