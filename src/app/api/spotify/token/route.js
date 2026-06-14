@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   checkRateLimit,
   getClientIp,
+  getRequestOrigin,
+  isRedirectUriOriginRequest,
   isSameOriginRequest,
   isValidAuthCode,
   isValidPkceVerifier,
@@ -22,10 +24,6 @@ export async function POST(request) {
     return jsonError("Service unavailable", 503);
   }
 
-  if (!isSameOriginRequest(request)) {
-    return jsonError("Forbidden", 403);
-  }
-
   const clientIp = getClientIp(request);
   const rate = checkRateLimit(`spotify-token:${clientIp}`, { max: 30, windowMs: 60_000 });
   if (!rate.allowed) {
@@ -37,9 +35,13 @@ export async function POST(request) {
     const { code, code_verifier, refresh_token, redirect_uri: bodyRedirectUri } =
       body ?? {};
 
-    const requestOrigin = request.headers.get("origin");
+    const redirectUri = bodyRedirectUri || SPOTIFY_REDIRECT_URI;
+    const requestOrigin = getRequestOrigin(request);
 
     if (refresh_token) {
+      if (!isSameOriginRequest(request)) {
+        return jsonError("Forbidden", 403);
+      }
       if (!isValidRefreshToken(refresh_token)) {
         return jsonError("Invalid request", 400);
       }
@@ -69,11 +71,17 @@ export async function POST(request) {
       });
     }
 
+    if (
+      !isSameOriginRequest(request) &&
+      !isRedirectUriOriginRequest(request, redirectUri)
+    ) {
+      return jsonError("Forbidden", 403);
+    }
+
     if (!isValidAuthCode(code) || !isValidPkceVerifier(code_verifier)) {
       return jsonError("Invalid request", 400);
     }
 
-    const redirectUri = bodyRedirectUri || SPOTIFY_REDIRECT_URI;
     const redirectOrigin = originFromUrl(redirectUri);
 
     if (
@@ -96,8 +104,38 @@ export async function POST(request) {
     });
 
     if (!response.ok) {
-      console.error("Spotify token exchange error:", response.status, await response.text());
-      return jsonError("Failed to exchange token", response.status);
+      let spotifyBody = null;
+      try {
+        spotifyBody = JSON.parse(await response.text());
+      } catch {
+        spotifyBody = null;
+      }
+
+      console.error(
+        "Spotify token exchange error:",
+        response.status,
+        spotifyBody ?? "unknown"
+      );
+
+      const description = spotifyBody?.error_description ?? "";
+      const spotifyError = spotifyBody?.error ?? "";
+
+      let message = "Failed to exchange token";
+      if (spotifyError === "invalid_grant" && /redirect/i.test(description)) {
+        message =
+          "Redirect URI mismatch. Add this exact URL in Spotify Dashboard → Redirect URIs: " +
+          redirectUri;
+      } else if (spotifyError === "invalid_grant") {
+        message =
+          "Spotify authorization expired or was already used. Click Connect Spotify and try again.";
+      } else if (description) {
+        message = description;
+      }
+
+      return jsonError(message, 400, {
+        details: description || message,
+        spotify_error: spotifyError || undefined,
+      });
     }
 
     const data = await response.json();

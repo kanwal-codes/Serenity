@@ -34,20 +34,37 @@ export function getAllowedOrigins() {
   return [...origins];
 }
 
-export function isSameOriginRequest(request) {
-  const allowed = getAllowedOrigins();
+export function getRequestOrigin(request) {
   const origin = request.headers.get("origin");
   if (origin) {
-    return allowed.includes(origin);
+    return origin;
   }
 
   const referer = request.headers.get("referer");
   if (referer) {
-    const refererOrigin = originFromUrl(referer);
-    return refererOrigin ? allowed.includes(refererOrigin) : false;
+    return originFromUrl(referer);
+  }
+
+  return null;
+}
+
+export function isSameOriginRequest(request) {
+  const allowed = getAllowedOrigins();
+  const requestOrigin = getRequestOrigin(request);
+  if (requestOrigin) {
+    return allowed.includes(requestOrigin);
   }
 
   return process.env.NODE_ENV === "development";
+}
+
+/** Allow token exchange when the request Origin matches the OAuth redirect_uri origin. */
+export function isRedirectUriOriginRequest(request, redirectUri) {
+  const requestOrigin = getRequestOrigin(request);
+  const redirectOrigin = originFromUrl(redirectUri);
+  return Boolean(
+    requestOrigin && redirectOrigin && requestOrigin === redirectOrigin
+  );
 }
 
 export function getClientIp(request) {

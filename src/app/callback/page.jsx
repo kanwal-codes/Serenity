@@ -30,7 +30,7 @@ function SpotifyCallbackContent() {
       }
 
       try {
-        const token = await spotifyAPI.getAccessToken();
+        const token = await spotifyAPI.completeOAuthFromCallback(code);
         if (!token) {
           throw new Error("Could not complete Spotify login. Please try again.");
         }

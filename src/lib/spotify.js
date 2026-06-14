@@ -23,9 +23,49 @@ const SPOTIFY_REDIRECT_URI = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || 'ht
 
 function getRedirectUri() {
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/callback`;
+    const origin = window.location.origin
+      .replace('http://localhost:', 'http://127.0.0.1:')
+      .replace('https://localhost:', 'https://127.0.0.1:');
+    return `${origin}/callback`;
   }
-  return SPOTIFY_REDIRECT_URI;
+  return SPOTIFY_REDIRECT_URI.replace(
+    'http://localhost:',
+    'http://127.0.0.1:'
+  );
+}
+
+function storeCodeVerifier(codeVerifier) {
+  sessionStorage.setItem('spotify_code_verifier', codeVerifier);
+  localStorage.setItem('spotify_code_verifier', codeVerifier);
+}
+
+function readCodeVerifier() {
+  return (
+    sessionStorage.getItem('spotify_code_verifier') ||
+    localStorage.getItem('spotify_code_verifier')
+  );
+}
+
+const OAUTH_CODE_LOCK_KEY = 'spotify_oauth_code_lock';
+
+function lockOAuthCode(code) {
+  if (typeof window === 'undefined') return false;
+  const locked = sessionStorage.getItem(OAUTH_CODE_LOCK_KEY);
+  if (locked === code) {
+    return false;
+  }
+  sessionStorage.setItem(OAUTH_CODE_LOCK_KEY, code);
+  return true;
+}
+
+function unlockOAuthCode() {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(OAUTH_CODE_LOCK_KEY);
+}
+
+function clearCodeVerifier() {
+  sessionStorage.removeItem('spotify_code_verifier');
+  localStorage.removeItem('spotify_code_verifier');
 }
 
 // Spotify Web API base URL
@@ -93,9 +133,55 @@ class SpotifyAPI {
     this.accessToken = null;
   }
 
+  async completeOAuthFromCallback(code) {
+    if (!code) {
+      throw new Error('Missing Spotify authorization code.');
+    }
+
+    if (!lockOAuthCode(code)) {
+      if (this.accessToken) {
+        return this.accessToken;
+      }
+
+      const stored = localStorage.getItem('spotify_access_token');
+      const expiresAt = localStorage.getItem('spotify_expires_at');
+      if (
+        stored &&
+        expiresAt &&
+        Date.now() < Number.parseInt(expiresAt, 10)
+      ) {
+        this.accessToken = stored;
+        return stored;
+      }
+
+      throw new Error(
+        'Spotify authorization was already processed. Click Connect Spotify and try again.'
+      );
+    }
+
+    const codeVerifier = readCodeVerifier();
+    if (!codeVerifier) {
+      unlockOAuthCode();
+      throw new Error(
+        'Spotify login session expired. Click Connect Spotify and try again in the same browser tab.'
+      );
+    }
+
+    try {
+      const token = await this.exchangeCodeForToken(code, codeVerifier);
+      clearCodeVerifier();
+      unlockOAuthCode();
+      return token;
+    } catch (error) {
+      unlockOAuthCode();
+      clearCodeVerifier();
+      throw error;
+    }
+  }
+
   /**
    * Exchange authorization code for access token
-   * 
+   *
    * This calls our server-side API route which performs the actual token exchange.
    * Why server-side? While PKCE doesn't strictly require it, this approach:
    * - Keeps token exchange logic centralized
@@ -123,7 +209,11 @@ class SpotifyAPI {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to exchange code for token');
+        const message =
+          error.details ||
+          error.error ||
+          'Failed to exchange code for token';
+        throw new Error(message);
       }
 
       const data = await response.json();
@@ -225,22 +315,21 @@ class SpotifyAPI {
 
       // If we have an authorization code, exchange it for a token
       if (code) {
-        const codeVerifier = sessionStorage.getItem('spotify_code_verifier');
+        const codeVerifier = readCodeVerifier();
         if (!codeVerifier) {
           throw new Error(
-            'Spotify login session expired. Click Connect Spotify and try again.'
+            'Spotify login session expired. Click Connect Spotify and try again in the same browser tab.'
           );
         }
 
-        // Clean URL immediately to prevent re-processing on refresh
         window.history.replaceState(null, '', window.location.pathname);
 
         try {
           const token = await this.exchangeCodeForToken(code, codeVerifier);
-          sessionStorage.removeItem('spotify_code_verifier');
+          clearCodeVerifier();
           return token;
         } catch (error) {
-          sessionStorage.removeItem('spotify_code_verifier');
+          clearCodeVerifier();
           throw error;
         }
       }
@@ -331,7 +420,7 @@ class SpotifyAPI {
     // - More secure (cleared when tab closes)
     // - Only needed during OAuth flow
     // - Prevents accidental reuse across sessions
-    sessionStorage.setItem('spotify_code_verifier', codeVerifier);
+    storeCodeVerifier(codeVerifier);
 
     const redirectUri = getRedirectUri();
 
