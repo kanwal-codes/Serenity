@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo, useId } from "react";
 import {
   Home,
   Search,
@@ -328,9 +328,10 @@ function QueuePanel({
   );
 }
 
-function SeekBar({ progress, onSeek }) {
+function DragSlider({ value, onChange, ariaLabel, className }) {
   const barRef = useRef(null);
   const draggingRef = useRef(false);
+  const percent = Math.max(0, Math.min(100, value));
 
   const fractionFromEvent = useCallback((clientX) => {
     const bar = barRef.current;
@@ -339,28 +340,28 @@ function SeekBar({ progress, onSeek }) {
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   }, []);
 
-  const handleSeek = useCallback(
+  const handleChange = useCallback(
     (clientX) => {
-      onSeek(fractionFromEvent(clientX));
+      onChange(fractionFromEvent(clientX));
     },
-    [fractionFromEvent, onSeek]
+    [fractionFromEvent, onChange]
   );
 
   const handlePointerDown = useCallback(
     (e) => {
       draggingRef.current = true;
       barRef.current?.setPointerCapture(e.pointerId);
-      handleSeek(e.clientX);
+      handleChange(e.clientX);
     },
-    [handleSeek]
+    [handleChange]
   );
 
   const handlePointerMove = useCallback(
     (e) => {
       if (!draggingRef.current) return;
-      handleSeek(e.clientX);
+      handleChange(e.clientX);
     },
-    [handleSeek]
+    [handleChange]
   );
 
   const handlePointerUp = useCallback((e) => {
@@ -372,11 +373,14 @@ function SeekBar({ progress, onSeek }) {
     <div
       ref={barRef}
       role="slider"
-      aria-label="Seek"
+      aria-label={ariaLabel}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={Math.round(progress)}
-      className="relative h-1 flex-1 cursor-pointer touch-none rounded-sm bg-muted"
+      aria-valuenow={Math.round(percent)}
+      className={cn(
+        "relative h-1 cursor-pointer touch-none rounded-sm bg-muted",
+        className
+      )}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -384,12 +388,176 @@ function SeekBar({ progress, onSeek }) {
     >
       <div
         className="pointer-events-none h-full rounded-sm bg-m3-primary"
-        style={{ width: `${progress}%` }}
+        style={{ width: `${percent}%` }}
       />
       <div
         className="pointer-events-none absolute top-1/2 h-3 w-3 rounded-full bg-m3-primary"
-        style={{ left: `${progress}%`, transform: "translate(-50%, -50%)" }}
+        style={{ left: `${percent}%`, transform: "translate(-50%, -50%)" }}
       />
+    </div>
+  );
+}
+
+function buildWavePath(width, mid, amplitude, cycles) {
+  const steps = 120;
+  let d = "";
+  for (let i = 0; i <= steps; i++) {
+    const x = (i / steps) * width;
+    const y =
+      mid + amplitude * Math.sin((i / steps) * Math.PI * 2 * cycles);
+    d += `${i === 0 ? "M" : " L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+  }
+  return d;
+}
+
+function WaveSeekBar({ progress, onSeek, isPlaying }) {
+  const barRef = useRef(null);
+  const draggingRef = useRef(false);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const clipId = useId();
+  const percent = Math.max(0, Math.min(100, progress));
+  const viewWidth = 400;
+  const viewHeight = 24;
+
+  const wavePath = useMemo(
+    () => buildWavePath(viewWidth, viewHeight / 2, 8.5, 5),
+    []
+  );
+
+  const fractionFromEvent = useCallback((clientX) => {
+    const bar = barRef.current;
+    if (!bar) return 0;
+    const rect = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  }, []);
+
+  const handleChange = useCallback(
+    (clientX) => {
+      onSeek(fractionFromEvent(clientX));
+    },
+    [fractionFromEvent, onSeek]
+  );
+
+  const handlePointerDown = useCallback(
+    (e) => {
+      draggingRef.current = true;
+      setIsSeeking(true);
+      barRef.current?.setPointerCapture(e.pointerId);
+      handleChange(e.clientX);
+    },
+    [handleChange]
+  );
+
+  const handlePointerMove = useCallback(
+    (e) => {
+      if (!draggingRef.current) return;
+      handleChange(e.clientX);
+    },
+    [handleChange]
+  );
+
+  const handlePointerUp = useCallback((e) => {
+    draggingRef.current = false;
+    barRef.current?.releasePointerCapture(e.pointerId);
+    setIsSeeking(false);
+  }, []);
+
+  return (
+    <div
+      ref={barRef}
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(percent)}
+      className={cn(
+        "relative flex-1 cursor-pointer touch-none transition-[height] duration-200 ease-out",
+        isSeeking ? "h-1" : "h-6"
+      )}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      <div
+        className={cn(
+          "absolute inset-0 overflow-hidden transition-opacity duration-200",
+          isSeeking ? "pointer-events-none opacity-0" : "opacity-100"
+        )}
+        aria-hidden={isSeeking}
+      >
+        <svg
+          viewBox={`0 0 ${viewWidth} ${viewHeight}`}
+          preserveAspectRatio="none"
+          className="h-full w-full"
+        >
+          <defs>
+            <clipPath id={clipId}>
+              <rect
+                x="0"
+                y="0"
+                width={(percent / 100) * viewWidth}
+                height={viewHeight}
+              />
+            </clipPath>
+          </defs>
+          <g className={cn(isPlaying && "animate-seek-wave")}>
+            <path
+              d={wavePath}
+              fill="none"
+              stroke="var(--muted-foreground)"
+              strokeWidth="2"
+              strokeOpacity="0.35"
+              vectorEffect="non-scaling-stroke"
+            />
+            <path
+              d={wavePath}
+              fill="none"
+              stroke="var(--m3-primary)"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+              clipPath={`url(#${clipId})`}
+            />
+            <path
+              d={wavePath}
+              fill="none"
+              stroke="var(--muted-foreground)"
+              strokeWidth="2"
+              strokeOpacity="0.35"
+              vectorEffect="non-scaling-stroke"
+              transform={`translate(${viewWidth} 0)`}
+            />
+            <path
+              d={wavePath}
+              fill="none"
+              stroke="var(--m3-primary)"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+              clipPath={`url(#${clipId})`}
+              transform={`translate(${viewWidth} 0)`}
+            />
+          </g>
+        </svg>
+      </div>
+
+      <div
+        className={cn(
+          "absolute inset-0 transition-opacity duration-200",
+          isSeeking ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        aria-hidden={!isSeeking}
+      >
+        <div className="relative h-full w-full rounded-sm bg-muted">
+          <div
+            className="pointer-events-none h-full rounded-sm bg-m3-primary"
+            style={{ width: `${percent}%` }}
+          />
+          <div
+            className="pointer-events-none absolute top-1/2 h-3 w-3 rounded-full bg-m3-primary"
+            style={{ left: `${percent}%`, transform: "translate(-50%, -50%)" }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -495,8 +663,8 @@ export function MainNavigation({
 
       {/* Now Playing Bar — always visible when a track is loaded */}
       {currentTrack ? (
-        <div className="relative z-50 flex h-[88px] shrink-0 items-center gap-4 border-t border-border bg-[var(--surface-container)] px-4 shadow-[0_-4px_24px_rgba(0,0,0,0.35)] backdrop-blur-3xl">
-          <div className="flex min-w-[200px] items-center gap-3" style={{ width: 260 }}>
+        <div className="relative z-50 grid h-[88px] shrink-0 grid-cols-[minmax(0,1fr)_minmax(480px,720px)_minmax(0,1fr)] items-center gap-4 border-t border-border bg-[var(--surface-container)] px-4 shadow-[0_-4px_24px_rgba(0,0,0,0.35)] backdrop-blur-3xl">
+          <div className="flex min-w-0 items-center gap-3 justify-self-start">
             {currentTrack.cover ? (
               <img
                 src={currentTrack.cover}
@@ -531,8 +699,8 @@ export function MainNavigation({
             </button>
           </div>
 
-          <div className="flex max-w-md flex-1 flex-col items-center gap-2">
-            <div className="flex items-center gap-4">
+          <div className="flex w-full flex-col items-center justify-center gap-2 justify-self-center">
+            <div className="flex items-center justify-center gap-4">
               <button
                 type="button"
                 onClick={toggleShuffle}
@@ -594,18 +762,18 @@ export function MainNavigation({
               </button>
             </div>
 
-            <div className="flex w-full max-w-[500px] items-center gap-2">
+            <div className="flex w-full items-center gap-2">
               <span className="min-w-8 text-right font-body text-[11px] tabular-nums text-muted-foreground">
                 {currentTime}
               </span>
-              <SeekBar progress={progress} onSeek={seek} />
+              <WaveSeekBar progress={progress} onSeek={seek} isPlaying={isPlaying} />
               <span className="min-w-8 font-body text-[11px] tabular-nums text-muted-foreground">
                 {duration}
               </span>
             </div>
           </div>
 
-          <div className="relative flex min-w-[160px] items-center justify-end gap-3" style={{ width: 200 }}>
+          <div className="relative flex min-w-0 items-center justify-end gap-3 justify-self-end">
             <QueuePanel
               open={queueOpen}
               onClose={() => setQueueOpen(false)}
@@ -642,19 +810,13 @@ export function MainNavigation({
                 )}
               />
             </button>
-            <Volume2 className="h-5 w-5 text-muted-foreground" />
-            <div
-              className="relative h-1 w-20 cursor-pointer rounded-sm bg-muted"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                setVolume((e.clientX - rect.left) / rect.width);
-              }}
-            >
-              <div
-                className="h-full rounded-sm bg-muted-foreground transition-all"
-                style={{ width: `${volume * 100}%` }}
-              />
-            </div>
+            <Volume2 className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <DragSlider
+              value={volume * 100}
+              onChange={setVolume}
+              ariaLabel="Volume"
+              className="w-24"
+            />
           </div>
         </div>
       ) : null}

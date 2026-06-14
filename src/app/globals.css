@@ -302,6 +302,19 @@
       background-position: -200% 0;
     }
   }
+
+  @keyframes seek-wave-flow {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-seek-wave {
+    animation: seek-wave-flow 2.8s linear infinite;
+  }
 }
 
 ::-webkit-scrollbar {
