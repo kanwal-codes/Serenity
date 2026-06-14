@@ -651,6 +651,7 @@ export function PlayerProvider({ children }) {
     duration:
       duration > 0 ? formatTime(duration) : currentTrack?.duration || "0:00",
     progress,
+    durationSeconds: duration,
     volume,
     queueLength,
     queueTracks,
