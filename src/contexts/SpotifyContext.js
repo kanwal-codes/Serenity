@@ -48,6 +48,13 @@ export function SpotifyProvider({ children }) {
   useEffect(() => {
     refresh();
 
+    if (sessionStorage.getItem('spotify_start_oauth') === '1') {
+      sessionStorage.removeItem('spotify_start_oauth');
+      spotifyAPI.authorize().catch((error) => {
+        console.error('Spotify auto-connect failed:', error);
+      });
+    }
+
     const onFocus = () => {
       refresh();
     };
@@ -61,13 +68,11 @@ export function SpotifyProvider({ children }) {
       await spotifyAPI.authorize();
     } catch (error) {
       console.error("Spotify connect failed:", error);
-      if (typeof window !== "undefined") {
-        window.alert(
-          error instanceof Error
-            ? error.message
-            : "Could not start Spotify login. Please try again."
-        );
-      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not start Spotify login. Please try again.";
+      window.alert(message);
     }
   }, []);
 

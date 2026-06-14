@@ -57,7 +57,9 @@ console.log("Client ID:", CLIENT_ID);
 console.log("Redirect URI:", REDIRECT_URI);
 console.log("\n1) Open this URL in your browser and approve access:\n");
 console.log(authUrl);
-console.log("\n2) After redirect, copy the full callback URL (or just the code).\n");
+console.log("\n2) After redirect, copy the callback URL from the address bar.");
+console.log("   If Serenity opens /callback, ignore that page — paste the URL here.");
+console.log("   Do NOT use Connect Spotify in the app for this test.\n");
 
 const rl = readline.createInterface({ input, output });
 const pasted = await rl.question("Paste callback URL or code: ");

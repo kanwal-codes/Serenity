@@ -88,11 +88,7 @@ function SpotifyLibraryPanel({ collapsed, onSelectLibrary, librarySelection }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 scrollbar-none">
-        {loading ? (
-          <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-          </div>
-        ) : !isConnected ? (
+        {!isConnected ? (
           <div className="rounded-2xl border border-border bg-card p-4">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--spotify-green)]/15">
               <Music2 className="h-5 w-5 text-[var(--spotify-green)]" />
@@ -104,13 +100,22 @@ function SpotifyLibraryPanel({ collapsed, onSelectLibrary, librarySelection }) {
               Sync your playlists, recently played, and search millions of tracks.
             </p>
             <Button
+              type="button"
               onClick={connect}
               className="mt-4 w-full bg-[var(--spotify-green)] text-white hover:bg-[var(--spotify-green)]/90"
               size="sm"
             >
-              <LogIn className="mr-2 h-4 w-4" />
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <LogIn className="mr-2 h-4 w-4" />
+              )}
               Connect Spotify
             </Button>
+          </div>
+        ) : loading ? (
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : (
           <>

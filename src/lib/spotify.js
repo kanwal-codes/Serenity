@@ -31,9 +31,13 @@ function isLocalHostname(hostname) {
   return hostname === 'localhost' || hostname === '127.0.0.1';
 }
 
-function getRegisteredRedirectHost() {
+function getCanonicalProductionOrigin() {
   try {
-    return new URL(SPOTIFY_REDIRECT_URI).hostname;
+    const host = new URL(SPOTIFY_REDIRECT_URI).hostname;
+    if (isLocalHostname(host)) {
+      return null;
+    }
+    return new URL(SPOTIFY_REDIRECT_URI).origin;
   } catch {
     return null;
   }
@@ -41,24 +45,11 @@ function getRegisteredRedirectHost() {
 
 function getRedirectUri() {
   if (typeof window !== 'undefined') {
-    const { hostname, origin } = window.location;
-
-    if (isLocalHostname(hostname)) {
-      return normalizeRedirectUri(`${origin}/callback`);
-    }
-
-    const configured = SPOTIFY_REDIRECT_URI
-      ? normalizeRedirectUri(SPOTIFY_REDIRECT_URI)
-      : null;
-
-    if (configured && !configured.includes('127.0.0.1') && !configured.includes('localhost')) {
-      return configured;
-    }
-
-    return normalizeRedirectUri(`${origin}/callback`);
+    return `${window.location.origin}/callback`;
   }
 
-  return normalizeRedirectUri(SPOTIFY_REDIRECT_URI);
+  const canonical = getCanonicalProductionOrigin();
+  return canonical ? `${canonical}/callback` : SPOTIFY_REDIRECT_URI;
 }
 
 function storeCodeVerifier(codeVerifier) {
@@ -74,6 +65,7 @@ function readCodeVerifier() {
 }
 
 const OAUTH_CODE_LOCK_KEY = 'spotify_oauth_code_lock';
+const OAUTH_START_FLAG = 'spotify_start_oauth';
 let oauthExchangePromise = null;
 
 function lockOAuthCode(code) {
@@ -201,8 +193,11 @@ class SpotifyAPI {
     oauthExchangePromise = (async () => {
       const codeVerifier = readCodeVerifier();
       if (!codeVerifier) {
+        const onLocal = typeof window !== 'undefined' && isLocalHostname(window.location.hostname);
         throw new Error(
-          'Spotify login session expired. Click Connect Spotify and try again in the same browser tab.'
+          onLocal
+            ? 'Spotify login session was lost. Use http://127.0.0.1:3000 (not localhost), click Connect Spotify again, and complete login without closing the tab. If you used scripts/spotify-oauth-test.mjs, paste the callback URL into that terminal instead.'
+            : 'Spotify login session expired. Click Connect Spotify and try again in the same browser tab.'
         );
       }
 
@@ -444,21 +439,22 @@ class SpotifyAPI {
       return;
     }
 
-    const registeredHost = getRegisteredRedirectHost();
-    if (
-      registeredHost &&
-      !isLocalHostname(window.location.hostname) &&
-      window.location.hostname !== registeredHost
-    ) {
-      const productionUrl = normalizeRedirectUri(SPOTIFY_REDIRECT_URI).replace(
-        /\/callback$/,
-        ''
-      );
-      const message =
-        `Spotify login must start from ${productionUrl}. Preview deployment URLs are not registered with Spotify.`;
-      window.alert(message);
-      window.location.href = productionUrl;
+    if (window.location.hostname === 'localhost') {
+      sessionStorage.setItem(OAUTH_START_FLAG, '1');
+      window.location.href = window.location.href.replace('//localhost', '//127.0.0.1');
       return;
+    }
+
+    const canonicalOrigin = getCanonicalProductionOrigin();
+    if (canonicalOrigin) {
+      const canonicalHost = new URL(canonicalOrigin).hostname;
+      if (
+        window.location.hostname.endsWith('.vercel.app') &&
+        window.location.hostname !== canonicalHost
+      ) {
+        window.location.href = `${canonicalOrigin}${window.location.pathname}`;
+        return;
+      }
     }
 
     // Requested permissions (scopes)
