@@ -91,7 +91,9 @@ export function PlayerProvider({ children }) {
       if (!state) return;
 
       setCurrentTrack(stateToCurrentTrack(state));
-      updateCurrentTime((state.progress_ms || 0) / 1000);
+      const sec = (state.progress_ms || 0) / 1000;
+      updateCurrentTime(sec);
+      pausedPositionRef.current = sec;
       if (state.duration_ms) {
         setDuration(state.duration_ms / 1000);
       }
@@ -307,7 +309,11 @@ export function PlayerProvider({ children }) {
           updateCurrentTime(targetSec);
         }
       } else if (Date.now() >= skipPollUntilRef.current) {
-        updateCurrentTime((state.progress_ms || 0) / 1000);
+        const sec = (state.progress_ms || 0) / 1000;
+        updateCurrentTime(sec);
+        if (state.is_playing) {
+          pausedPositionRef.current = sec;
+        }
       }
 
       const nearEnd =
@@ -458,16 +464,16 @@ export function PlayerProvider({ children }) {
     if (mode === "preview") {
       if (!audio) return;
       if (isPlaying) {
-        audio.pause();
         const pausedAt = audio.currentTime;
         pausedPositionRef.current = pausedAt;
         updateCurrentTime(pausedAt);
         setIsPlaying(false);
+        audio.pause();
       } else {
+        setIsPlaying(true);
         audio.currentTime = pausedPositionRef.current;
         try {
           await audio.play();
-          setIsPlaying(true);
         } catch (error) {
           console.error("Resume failed:", error);
           setIsPlaying(false);
@@ -477,42 +483,60 @@ export function PlayerProvider({ children }) {
     }
 
     if (mode === "spotify" && currentTrack.uri) {
-      skipPollUntilRef.current = Date.now() + 2500;
-      seekTargetRef.current = null;
-
       if (isPlaying) {
+        const pauseAt = currentTimeRef.current;
+        pausedPositionRef.current = pauseAt;
+        setIsPlaying(false);
+        wasPlayingRef.current = false;
+        skipPollUntilRef.current = Date.now() + 1000;
+
         const paused = await spotifyAPI.pausePlayback();
-        if (!paused) return;
-
-        const state = await spotifyAPI.getPlayerState();
-        if (state) {
-          const sec = (state.progress_ms || 0) / 1000;
-          pausedPositionRef.current = sec;
-          updateCurrentTime(sec);
-          setIsPlaying(state.is_playing ?? false);
-          wasPlayingRef.current = state.is_playing ?? false;
-        } else {
-          setIsPlaying(false);
-          wasPlayingRef.current = false;
-        }
-      } else {
-        const resumeMs = Math.floor(pausedPositionRef.current * 1000);
-        let resumed = await spotifyAPI.resumePlayback();
-        if (!resumed) {
-          resumed = await spotifyAPI.playTrack(currentTrack.uri, resumeMs);
-        }
-        if (!resumed) return;
-
-        const state = await spotifyAPI.getPlayerState();
-        if (state) {
-          const sec = (state.progress_ms || 0) / 1000;
-          pausedPositionRef.current = sec;
-          updateCurrentTime(sec);
-          setIsPlaying(state.is_playing ?? true);
-          wasPlayingRef.current = state.is_playing ?? true;
-        } else {
+        if (!paused) {
           setIsPlaying(true);
           wasPlayingRef.current = true;
+          return;
+        }
+
+        const state = await spotifyAPI.getPlayerState();
+        if (state && !state.is_playing) {
+          const sec = (state.progress_ms || 0) / 1000;
+          pausedPositionRef.current = sec;
+          updateCurrentTime(sec);
+        }
+      } else {
+        const resumeSec = Math.max(
+          pausedPositionRef.current,
+          currentTimeRef.current
+        );
+        const resumeMs = Math.floor(resumeSec * 1000);
+
+        setIsPlaying(true);
+        wasPlayingRef.current = true;
+        seekTargetRef.current = resumeSec;
+        updateCurrentTime(resumeSec);
+        skipPollUntilRef.current = Date.now() + 1000;
+
+        const resumed = await spotifyAPI.playTrack(
+          currentTrack.uri,
+          resumeMs
+        );
+        if (!resumed) {
+          setIsPlaying(false);
+          wasPlayingRef.current = false;
+          seekTargetRef.current = null;
+          return;
+        }
+
+        const state = await spotifyAPI.getPlayerState();
+        if (state) {
+          setIsPlaying(state.is_playing ?? true);
+          wasPlayingRef.current = state.is_playing ?? true;
+          const sec = (state.progress_ms || 0) / 1000;
+          if (Math.abs(sec - resumeSec) < 2.5) {
+            pausedPositionRef.current = sec;
+            updateCurrentTime(sec);
+            seekTargetRef.current = null;
+          }
         }
       }
     }

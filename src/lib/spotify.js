@@ -902,12 +902,17 @@ class SpotifyAPI {
    */
   async pausePlayback() {
     try {
-      await this.ensureActiveDevice();
       await this.makeRequest('/me/player/pause', { method: 'PUT' });
       return true;
     } catch (error) {
-      console.error('Error pausing playback:', error);
-      return false;
+      try {
+        await this.ensureActiveDevice();
+        await this.makeRequest('/me/player/pause', { method: 'PUT' });
+        return true;
+      } catch (retryError) {
+        console.error('Error pausing playback:', retryError);
+        return false;
+      }
     }
   }
 
