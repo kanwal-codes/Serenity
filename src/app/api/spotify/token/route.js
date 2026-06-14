@@ -6,6 +6,7 @@ import {
   isValidAuthCode,
   isValidPkceVerifier,
   isValidRefreshToken,
+  originFromUrl,
 } from "@/lib/api-security";
 
 const SPOTIFY_CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID;
@@ -33,7 +34,10 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { code, code_verifier, refresh_token } = body ?? {};
+    const { code, code_verifier, refresh_token, redirect_uri: bodyRedirectUri } =
+      body ?? {};
+
+    const requestOrigin = request.headers.get("origin");
 
     if (refresh_token) {
       if (!isValidRefreshToken(refresh_token)) {
@@ -69,13 +73,23 @@ export async function POST(request) {
       return jsonError("Invalid request", 400);
     }
 
+    const redirectUri = bodyRedirectUri || SPOTIFY_REDIRECT_URI;
+    const redirectOrigin = originFromUrl(redirectUri);
+
+    if (
+      !redirectOrigin ||
+      (requestOrigin && redirectOrigin !== requestOrigin)
+    ) {
+      return jsonError("Invalid redirect_uri", 400);
+    }
+
     const response = await fetch("https://accounts.spotify.com/api/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        redirect_uri: SPOTIFY_REDIRECT_URI,
+        redirect_uri: redirectUri,
         client_id: SPOTIFY_CLIENT_ID,
         code_verifier,
       }),

@@ -21,6 +21,13 @@
 const SPOTIFY_CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || 'your-client-id';
 const SPOTIFY_REDIRECT_URI = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || 'http://localhost:3000/callback';
 
+function getRedirectUri() {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/callback`;
+  }
+  return SPOTIFY_REDIRECT_URI;
+}
+
 // Spotify Web API base URL
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
@@ -110,6 +117,7 @@ class SpotifyAPI {
         body: JSON.stringify({
           code,
           code_verifier: codeVerifier,
+          redirect_uri: getRedirectUri(),
         }),
       });
 
@@ -217,22 +225,23 @@ class SpotifyAPI {
 
       // If we have an authorization code, exchange it for a token
       if (code) {
-        // Get the code verifier we stored during authorization
         const codeVerifier = sessionStorage.getItem('spotify_code_verifier');
-        if (codeVerifier) {
-          // Clean URL immediately to prevent re-processing on refresh
-          window.history.replaceState(null, '', window.location.pathname);
-          
-          // Exchange code for token
-          try {
-            const token = await this.exchangeCodeForToken(code, codeVerifier);
-            // Remove verifier after successful exchange (one-time use)
-            sessionStorage.removeItem('spotify_code_verifier');
-            return token;
-          } catch (error) {
-            console.error('Failed to exchange code:', error);
-            return null;
-          }
+        if (!codeVerifier) {
+          throw new Error(
+            'Spotify login session expired. Click Connect Spotify and try again.'
+          );
+        }
+
+        // Clean URL immediately to prevent re-processing on refresh
+        window.history.replaceState(null, '', window.location.pathname);
+
+        try {
+          const token = await this.exchangeCodeForToken(code, codeVerifier);
+          sessionStorage.removeItem('spotify_code_verifier');
+          return token;
+        } catch (error) {
+          sessionStorage.removeItem('spotify_code_verifier');
+          throw error;
         }
       }
     }
@@ -324,11 +333,13 @@ class SpotifyAPI {
     // - Prevents accidental reuse across sessions
     sessionStorage.setItem('spotify_code_verifier', codeVerifier);
 
+    const redirectUri = getRedirectUri();
+
     // Build authorization URL with PKCE parameters
     const authUrl = `https://accounts.spotify.com/authorize?` +
       `client_id=${SPOTIFY_CLIENT_ID}&` +
       `response_type=code&` +  // Authorization Code flow (not token/implicit)
-      `redirect_uri=${encodeURIComponent(SPOTIFY_REDIRECT_URI)}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `scope=${encodeURIComponent(scopes)}&` +
       `code_challenge=${codeChallenge}&` +
       `code_challenge_method=S256`;  // SHA-256 hashing

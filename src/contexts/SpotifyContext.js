@@ -57,7 +57,18 @@ export function SpotifyProvider({ children }) {
   }, [refresh]);
 
   const connect = useCallback(async () => {
-    await spotifyAPI.authorize();
+    try {
+      await spotifyAPI.authorize();
+    } catch (error) {
+      console.error("Spotify connect failed:", error);
+      if (typeof window !== "undefined") {
+        window.alert(
+          error instanceof Error
+            ? error.message
+            : "Could not start Spotify login. Please try again."
+        );
+      }
+    }
   }, []);
 
   const disconnect = useCallback(() => {

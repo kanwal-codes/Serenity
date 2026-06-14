@@ -10,6 +10,8 @@ function originFromUrl(url) {
   }
 }
 
+export { originFromUrl };
+
 export function getAllowedOrigins() {
   const origins = new Set(DEFAULT_ORIGINS);
 
@@ -23,6 +25,10 @@ export function getAllowedOrigins() {
   );
   if (redirectOrigin) {
     origins.add(redirectOrigin);
+  }
+
+  if (process.env.VERCEL_URL) {
+    origins.add(`https://${process.env.VERCEL_URL}`);
   }
 
   return [...origins];
