@@ -442,7 +442,8 @@ function WaveSeekBar({ progress, onSeek }) {
     return () => observer.disconnect();
   }, [measurePath]);
 
-  const playedOffset = pathLength * (1 - percent / 100);
+  const playedLength =
+    pathLength > 0 ? (percent / 100) * pathLength : 0;
 
   const fractionFromEvent = useCallback((clientX) => {
     const bar = barRef.current;
@@ -515,25 +516,23 @@ function WaveSeekBar({ progress, onSeek }) {
             ref={wavePathRef}
             d={wavePath}
             fill="none"
-            stroke="var(--muted-foreground)"
-            strokeWidth="2.5"
-            strokeOpacity="0.28"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
+            stroke="transparent"
+            strokeWidth="0"
+            aria-hidden
           />
-          <path
-            d={wavePath}
-            fill="none"
-            stroke="var(--m3-primary)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-            strokeDasharray={pathLength > 0 ? pathLength : undefined}
-            strokeDashoffset={pathLength > 0 ? playedOffset : undefined}
-            style={{ transition: "stroke-dashoffset 0.12s linear" }}
-          />
+          {playedLength > 0 && (
+            <path
+              d={wavePath}
+              fill="none"
+              stroke="var(--m3-primary)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+              strokeDasharray={`${playedLength} ${pathLength}`}
+              style={{ transition: "stroke-dasharray 0.12s linear" }}
+            />
+          )}
         </svg>
       </div>
 
@@ -697,7 +696,7 @@ export function MainNavigation({
           </div>
 
           <div className="flex w-full flex-col items-center justify-center gap-2 justify-self-center">
-            <div className="flex items-center justify-center gap-4">
+            <div className="relative z-10 flex items-center justify-center gap-4">
               <button
                 type="button"
                 onClick={toggleShuffle}

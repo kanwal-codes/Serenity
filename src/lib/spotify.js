@@ -902,6 +902,7 @@ class SpotifyAPI {
    */
   async pausePlayback() {
     try {
+      await this.ensureActiveDevice();
       await this.makeRequest('/me/player/pause', { method: 'PUT' });
       return true;
     } catch (error) {
@@ -915,7 +916,11 @@ class SpotifyAPI {
    */
   async resumePlayback() {
     try {
-      await this.makeRequest('/me/player/play', { method: 'PUT' });
+      const deviceId = await this.ensureActiveDevice();
+      const endpoint = deviceId
+        ? `/me/player/play?device_id=${encodeURIComponent(deviceId)}`
+        : '/me/player/play';
+      await this.makeRequest(endpoint, { method: 'PUT' });
       return true;
     } catch (error) {
       console.error('Error resuming playback:', error);

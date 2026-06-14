@@ -451,7 +451,11 @@ export function PlayerProvider({ children }) {
     const audio = audioRef.current;
     if (!currentTrack) return;
 
-    if (playbackModeRef.current === "preview") {
+    const mode =
+      playbackModeRef.current ??
+      (currentTrack.uri ? "spotify" : currentTrack.preview_url ? "preview" : null);
+
+    if (mode === "preview") {
       if (!audio) return;
       if (isPlaying) {
         audio.pause();
@@ -460,10 +464,10 @@ export function PlayerProvider({ children }) {
         updateCurrentTime(pausedAt);
         setIsPlaying(false);
       } else {
-        setIsPlaying(true);
         audio.currentTime = pausedPositionRef.current;
         try {
           await audio.play();
+          setIsPlaying(true);
         } catch (error) {
           console.error("Resume failed:", error);
           setIsPlaying(false);
@@ -472,29 +476,32 @@ export function PlayerProvider({ children }) {
       return;
     }
 
-    if (playbackModeRef.current === "spotify") {
+    if (mode === "spotify" && currentTrack.uri) {
       skipPollUntilRef.current = Date.now() + 2500;
       seekTargetRef.current = null;
 
       if (isPlaying) {
-        await spotifyAPI.pausePlayback();
+        const paused = await spotifyAPI.pausePlayback();
+        if (!paused) return;
+
         const state = await spotifyAPI.getPlayerState();
         if (state) {
           const sec = (state.progress_ms || 0) / 1000;
           pausedPositionRef.current = sec;
           updateCurrentTime(sec);
+          setIsPlaying(state.is_playing ?? false);
+          wasPlayingRef.current = state.is_playing ?? false;
+        } else {
+          setIsPlaying(false);
+          wasPlayingRef.current = false;
         }
-        setIsPlaying(false);
-        wasPlayingRef.current = false;
-      } else if (currentTrack.uri) {
-        setIsPlaying(true);
-        wasPlayingRef.current = true;
-
+      } else {
         const resumeMs = Math.floor(pausedPositionRef.current * 1000);
-        const resumed = await spotifyAPI.resumePlayback();
+        let resumed = await spotifyAPI.resumePlayback();
         if (!resumed) {
-          await spotifyAPI.playTrack(currentTrack.uri, resumeMs);
+          resumed = await spotifyAPI.playTrack(currentTrack.uri, resumeMs);
         }
+        if (!resumed) return;
 
         const state = await spotifyAPI.getPlayerState();
         if (state) {
@@ -503,6 +510,9 @@ export function PlayerProvider({ children }) {
           updateCurrentTime(sec);
           setIsPlaying(state.is_playing ?? true);
           wasPlayingRef.current = state.is_playing ?? true;
+        } else {
+          setIsPlaying(true);
+          wasPlayingRef.current = true;
         }
       }
     }
